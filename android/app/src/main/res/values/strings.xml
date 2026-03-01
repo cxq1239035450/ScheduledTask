@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">ScheduledTask</string>
+    <string name="accessibility_service_description">用于模拟屏幕点击和滑动，以辅助自动化任务执行。</string>
 </resources>

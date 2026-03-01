@@ -2,8 +2,9 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 
-import Task from '../modules/Task/index.tsx';
-import SetScreen from '../modules/set/index.tsx';
+import TaskScreen from '../modules/Task/index.tsx';
+import LogsScreen from '../modules/Logs/index.tsx';
+import SetScreen from '../modules/Set/index.tsx';
 import { Icon } from 'react-native-paper';
 
 
@@ -23,8 +24,8 @@ export default function TabNavigator() {
       }}
     >
       <Tab.Screen
-        name="Task"
-        component={Task}
+        name="TaskScreen"
+        component={TaskScreen}
         options={{
           title: '任务列表',
           tabBarIcon: ({ color, size }) => (
@@ -33,8 +34,8 @@ export default function TabNavigator() {
         }}
       />
       <Tab.Screen
-        name="SetScreen"
-        component={SetScreen}
+        name="LogsScreen"
+        component={LogsScreen}
         options={{
           title: '日志',
           tabBarIcon: ({ color, size }) => (
@@ -42,6 +43,16 @@ export default function TabNavigator() {
           ),
         }}
       />
+      <Tab.Screen
+        name="SetScreen"
+        component={SetScreen}
+        options={{
+          title: '设置',
+          tabBarIcon: ({ color, size }) => (
+            <Icon source="settings" color={color} size={size} />
+          ),
+        }}
+      />
     </Tab.Navigator>
   );
-};
+}

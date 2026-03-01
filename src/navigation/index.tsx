@@ -4,7 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 // 页面组件
-import LoginScreen from '../modules/login';
+import LoginScreen from '../modules/Login';
 import TabNavigator from './TabNavigator';
 
 // 1. 创建导航实例
