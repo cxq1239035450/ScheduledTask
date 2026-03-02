@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, NativeModules, Alert, Modal, ScrollView, PermissionsAndroid, Platform } from 'react-native';
-import { Icon, FAB, Card, Switch, Button, List, Searchbar, Divider } from 'react-native-paper';
+import { Icon, FAB, Card, Switch, Button, List, Searchbar, Divider, TextInput } from 'react-native-paper';
 import BackgroundTimer from 'react-native-background-timer';
 import BackgroundTaskManager from '../../utils/BackgroundTaskManager';
 import LogManager from '../../utils/LogManager';
+import AppManager from '../../utils/AppManager';
+import TaskInstructionExecutor from '../../utils/TaskInstructionExecutor';
+import { Task, TaskInstruction, COMMON_INSTRUCTION_TEMPLATES } from '../../types/TaskInstruction';
 
 const { WakeScreenModule, TouchSimulationModule, AppLauncherModule } = NativeModules;
 
@@ -13,9 +16,57 @@ interface AppInfo {
   userId: number;
 }
 
-// 模拟任务数据
-const MOCK_TASKS = [
-  { id: '1', title: '模拟钉钉打卡', time: '08:32', status: 'running', type: 'daily' },
+// 示例任务数据
+const EXAMPLE_TASKS: Task[] = [
+  {
+    id: '1',
+    title: '钉钉自动打卡',
+    description: '早上8:32自动打卡',
+    time: '08:32',
+    status: 'running',
+    type: 'daily',
+    instruction: [
+      {
+        id: 'wake_up',
+        type: 'log',
+        level: 'info',
+        message: '开始执行钉钉打卡任务'
+      },
+      {
+        id: 'launch_dingtalk',
+        type: 'launch_app',
+        packageName: 'com.alibaba.android.rimet',
+        waitForLaunch: 3000
+      },
+      {
+        id: 'swipe_unlock',
+        type: 'swipe',
+        direction: 'up',
+        distance: 200,
+        duration: 500
+      },
+      {
+        id: 'wait_for_load',
+        type: 'wait',
+        duration: 2000
+      },
+      {
+        id: 'click_attendance',
+        type: 'click',
+        target: {
+          type: 'text',
+          value: '打卡'
+        }
+      },
+      {
+        id: 'log_success',
+        type: 'log',
+        level: 'success',
+        message: '钉钉打卡任务执行完成'
+      }
+    ],
+    enabled: true
+  }
 ];
 
 function TaskHeader() {
@@ -47,7 +98,12 @@ const STATUS_CONFIG = {
   stopped: { label: '未运行', color: '#999' },
 };
 
-function TaskItem({ item, onToggle }: { item: typeof MOCK_TASKS[0], onToggle: (id: string) => void }) {
+function TaskItem({ item, onToggle, onEdit, onExecute }: { 
+  item: Task, 
+  onToggle: (id: string) => void,
+  onEdit: (task: Task) => void,
+  onExecute: (task: Task) => void 
+}) {
   const config = STATUS_CONFIG[item.status as keyof typeof STATUS_CONFIG];
   
   // Switch 开启状态：运行中或异常
@@ -58,15 +114,32 @@ function TaskItem({ item, onToggle }: { item: typeof MOCK_TASKS[0], onToggle: (i
       <Card.Content style={styles.cardContent}>
         <View style={styles.taskInfo}>
           <Text style={styles.taskTitle}>{item.title}</Text>
+          {item.description && (
+            <Text style={styles.taskDescription}>{item.description}</Text>
+          )}
           <View style={styles.timeRow}>
             <Icon source="clock-outline" size={14} color="#666" />
             <Text style={styles.taskTime}>{item.time}</Text>
+            <Text style={styles.instructionCount}>
+              {item.instruction.length} 个指令
+            </Text>
           </View>
         </View>
         <View style={styles.statusAction}>
-          <Text style={[styles.statusLabelText, { color: config.color }]}>
-            {/* {config.label} */}
-          </Text>
+          <View style={styles.actionButtons}>
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={() => onEdit(item)}
+            >
+              <Icon source="pencil" size={16} color="#666" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={() => onExecute(item)}
+            >
+              <Icon source="play" size={16} color="#4CAF50" />
+            </TouchableOpacity>
+          </View>
           <Switch
             value={isSwitchOn}
             onValueChange={() => onToggle(item.id)}
@@ -79,23 +152,133 @@ function TaskItem({ item, onToggle }: { item: typeof MOCK_TASKS[0], onToggle: (i
 }
 
 export default function TaskScreen() {
-  const [tasks, setTasks] = useState(MOCK_TASKS);
+  const [tasks, setTasks] = useState<Task[]>(EXAMPLE_TASKS);
   const [isAppPickerVisible, setAppPickerVisible] = useState(false);
   const [installedApps, setInstalledApps] = useState<AppInfo[]>([]);
   const [filteredApps, setFilteredApps] = useState<AppInfo[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isInstructionEditorVisible, setInstructionEditorVisible] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [instructionJson, setInstructionJson] = useState('');
+
+  useEffect(() => {
+    // 初始化时添加一些示例任务
+    BackgroundTaskManager.addTask('wakeup', '唤醒屏幕', '08:30', async () => {
+      try {
+        await WakeScreenModule.wakeUp();
+        await LogManager.addLog('屏幕已唤醒', 'success', '唤醒任务');
+      } catch (error: any) {
+        await LogManager.addLog(`唤醒失败: ${error.message}`, 'error', '唤醒任务');
+      }
+    });
+
+    BackgroundTaskManager.addTask('screenshot', '定时截图', '09:00', async () => {
+      try {
+        await LogManager.addLog('开始定时截图', 'info', '截图任务');
+        // 这里可以添加截图逻辑
+      } catch (error: any) {
+        await LogManager.addLog(`截图失败: ${error.message}`, 'error', '截图任务');
+      }
+    });
+
+    // 将现有指令任务同步到BackgroundTaskManager
+    tasks.forEach(task => {
+      if (task.enabled) {
+        BackgroundTaskManager.addInstructionTask(task);
+      }
+    });
+
+    return () => {
+      BackgroundTaskManager.clearTasks();
+      BackgroundTaskManager.clearInstructionTasks();
+    };
+  }, []);
 
   const handleToggle = (id: string) => {
     setTasks(prev => prev.map(task => {
       if (task.id === id) {
-        // 简单的切换逻辑：如果未运行则变为运行中，否则变为未运行
-        return {
+        const newStatus = task.status === 'stopped' ? 'running' : 'stopped';
+        const updatedTask = {
           ...task,
-          status: task.status === 'stopped' ? 'running' : 'stopped'
+          status: newStatus,
+          enabled: newStatus === 'running'
         };
+
+        // 同步到BackgroundTaskManager
+        if (newStatus === 'running') {
+          BackgroundTaskManager.enableInstructionTask(task.id);
+        } else {
+          BackgroundTaskManager.disableInstructionTask(task.id);
+        }
+
+        return updatedTask;
       }
       return task;
     }));
+  };
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setInstructionJson(JSON.stringify(task.instruction, null, 2));
+    setInstructionEditorVisible(true);
+  };
+
+  const handleExecuteTask = async (task: Task) => {
+    try {
+      Alert.alert('执行任务', `确定要执行任务 "${task.title}" 吗？`, [
+        { text: '取消', style: 'cancel' },
+        { 
+          text: '执行', 
+          onPress: async () => {
+            try {
+              const result = await TaskInstructionExecutor.executeTask(task.id, task.instruction);
+              Alert.alert(
+                '执行完成', 
+                `任务执行${result.success ? '成功' : '失败'}\n耗时: ${result.endTime.getTime() - result.startTime.getTime()}ms`
+              );
+            } catch (error: any) {
+              Alert.alert('执行失败', error.message);
+            }
+          }
+        }
+      ]);
+    } catch (error: any) {
+      Alert.alert('错误', error.message);
+    }
+  };
+
+  const handleSaveInstruction = () => {
+    if (!editingTask) return;
+
+    try {
+      const instructions = JSON.parse(instructionJson) as TaskInstruction[];
+      
+      setTasks(prev => prev.map(task => 
+        task.id === editingTask.id 
+          ? { ...task, instruction: instructions }
+          : task
+      ));
+
+      // 同步到BackgroundTaskManager
+      const updatedTask = { ...editingTask, instruction: instructions };
+      BackgroundTaskManager.updateInstructionTask(updatedTask);
+
+      setInstructionEditorVisible(false);
+      setEditingTask(null);
+      Alert.alert('保存成功', '任务指令已更新');
+    } catch (error: any) {
+      Alert.alert('保存失败', `JSON格式错误: ${error.message}`);
+    }
+  };
+
+  const handleAddInstructionTemplate = (template: any) => {
+    if (!editingTask) return;
+
+    const newInstruction = { ...template.instruction };
+    newInstruction.id = `${newInstruction.id}_${Date.now()}`;
+
+    const updatedInstructions = [...editingTask.instruction, newInstruction];
+    setInstructionJson(JSON.stringify(updatedInstructions, null, 2));
   };
 
   const scheduleWakeup = (minutes: number) => {
@@ -120,21 +303,34 @@ export default function TaskScreen() {
       
     }, ms);
   };
-// 申请 Android 前台服务权限
 const requestForegroundPermission = async () => {
   if (Platform.OS === 'android' && Platform.Version >= 33) {
     try {
-      // Android 13+ 必须申请通知权限，否则前台服务无法弹出通知会导致系统直接杀掉进程
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
-        {
-          title: '通知权限申请',
-          message: 'App需要显示通知权限，才能在后台持续运行定时任务',
-          buttonPositive: '允许',
-          buttonNegative: '取消',
-        }
+      const permissionsToRequest = [];
+
+      if (Platform.Version >= 33) {
+        permissionsToRequest.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+      }
+
+      if (permissionsToRequest.length === 0) {
+        return true;
+      }
+
+      const results = await PermissionsAndroid.requestMultiple(permissionsToRequest);
+
+      const allGranted = Object.values(results).every(
+        result => result === PermissionsAndroid.RESULTS.GRANTED
       );
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
+
+      if (!allGranted) {
+        const deniedPermissions = Object.entries(results)
+          .filter(([_, result]) => result !== PermissionsAndroid.RESULTS.GRANTED)
+          .map(([permission]) => permission);
+        
+        console.warn('部分权限未授予:', deniedPermissions);
+      }
+
+      return allGranted;
     } catch (err) {
       console.error('权限申请失败：', err);
       return false;
@@ -165,19 +361,35 @@ const requestForegroundPermission = async () => {
     TouchSimulationModule.openAccessibilitySettings();
   };
 
-  const handleLaunchApp = (packageName: string, userId: number = 0) => {
+  const handleLaunchApp = async (packageName: string, userId: number = 0) => {
     LogManager.addLog(`尝试启动应用: ${packageName} (UID: ${userId})`, 'info');
-    AppLauncherModule.launchApp(packageName, userId);
+    const success = await AppManager.launchApp(packageName, userId);
+    if (success) {
+      LogManager.addLog(`应用启动成功: ${packageName}`, 'success');
+    } else {
+      LogManager.addLog(`应用启动失败: ${packageName}`, 'error');
+    }
   };
 
   const openAppPicker = async () => {
     try {
-      const apps = await AppLauncherModule.getInstalledApps();
+      const apps = await AppManager.getAllInstalledApps();
       setInstalledApps(apps);
       setFilteredApps(apps);
       setAppPickerVisible(true);
     } catch (e) {
       Alert.alert('错误', '无法获取应用列表');
+    }
+  };
+
+  const openCommonAppsPicker = async () => {
+    try {
+      const apps = await AppManager.getCommonApps();
+      setInstalledApps(apps);
+      setFilteredApps(apps);
+      setAppPickerVisible(true);
+    } catch (e) {
+      Alert.alert('错误', '无法获取常用应用列表');
     }
   };
 
@@ -250,6 +462,16 @@ const requestForegroundPermission = async () => {
         >
           从应用列表选择并打开
         </Button>
+
+        <Button 
+          mode="text" 
+          onPress={openCommonAppsPicker}
+          icon="star-outline"
+          style={{ marginTop: -4 }}
+          labelStyle={{ fontSize: 12, color: '#FF9800' }}
+        >
+          从常用应用选择并打开
+        </Button>
       </View>
 
       <Modal
@@ -295,7 +517,14 @@ const requestForegroundPermission = async () => {
 
       <FlatList
         data={tasks}
-        renderItem={({ item }) => <TaskItem item={item} onToggle={handleToggle} />}
+        renderItem={({ item }) => (
+          <TaskItem 
+            item={item} 
+            onToggle={handleToggle}
+            onEdit={handleEditTask}
+            onExecute={handleExecuteTask}
+          />
+        )}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -306,6 +535,90 @@ const requestForegroundPermission = async () => {
         style={styles.fab}
         onPress={() => console.log('Add Task')}
       />
+
+      {/* 指令编辑器模态框 */}
+      <Modal
+        visible={isInstructionEditorVisible}
+        animationType="slide"
+        onRequestClose={() => setInstructionEditorVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              编辑任务指令 - {editingTask?.title}
+            </Text>
+            <TouchableOpacity onPress={() => setInstructionEditorVisible(false)}>
+              <Icon source="close" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.instructionEditorContainer}>
+            <Text style={styles.sectionTitle}>指令模板</Text>
+            <ScrollView horizontal style={styles.templateContainer}>
+              {COMMON_INSTRUCTION_TEMPLATES.map(template => (
+                <TouchableOpacity
+                  key={template.id}
+                  style={styles.templateItem}
+                  onPress={() => handleAddInstructionTemplate(template)}
+                >
+                  <Text style={styles.templateName}>{template.name}</Text>
+                  <Text style={styles.templateDescription}>{template.description}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.sectionTitle}>指令JSON</Text>
+            <TextInput
+              mode="outlined"
+              multiline
+              value={instructionJson}
+              onChangeText={setInstructionJson}
+              style={styles.jsonInput}
+              placeholder="输入任务指令JSON..."
+              contentStyle={{ fontFamily: 'monospace' }}
+            />
+
+            <Text style={styles.sectionTitle}>指令说明</Text>
+            <View style={styles.instructionHelp}>
+              <Text style={styles.helpText}>
+                • launch_app: 启动应用 (packageName: 包名)
+              </Text>
+              <Text style={styles.helpText}>
+                • click: 点击操作 (target: 目标位置)
+              </Text>
+              <Text style={styles.helpText}>
+                • swipe: 滑动操作 (direction: 方向)
+              </Text>
+              <Text style={styles.helpText}>
+                • input_text: 输入文本 (text: 输入内容)
+              </Text>
+              <Text style={styles.helpText}>
+                • wait: 等待 (duration: 毫秒数)
+              </Text>
+              <Text style={styles.helpText}>
+                • log: 日志 (level: 级别, message: 消息)
+              </Text>
+            </View>
+          </ScrollView>
+
+          <View style={styles.modalActions}>
+            <Button
+              mode="outlined"
+              onPress={() => setInstructionEditorVisible(false)}
+              style={styles.cancelButton}
+            >
+              取消
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleSaveInstruction}
+              style={styles.saveButton}
+            >
+              保存
+            </Button>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -395,6 +708,11 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 6,
   },
+  taskDescription: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
   timeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -404,10 +722,28 @@ const styles = StyleSheet.create({
     color: '#666',
     marginLeft: 4,
   },
+  instructionCount: {
+    fontSize: 12,
+    color: '#4F46E5',
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
   statusAction: {
     flexDirection: 'row',
     alignItems: 'center',
     marginLeft: 12,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#F3F4F6',
   },
   statusLabelText: {
     fontSize: 12,
@@ -441,5 +777,69 @@ const styles = StyleSheet.create({
     margin: 16,
     elevation: 0,
     backgroundColor: '#f5f5f5',
+  },
+  instructionEditorContainer: {
+    flex: 1,
+    padding: 20,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  templateContainer: {
+    marginBottom: 20,
+  },
+  templateItem: {
+    backgroundColor: '#F3F4F6',
+    padding: 12,
+    marginRight: 12,
+    borderRadius: 8,
+    minWidth: 120,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  templateName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  templateDescription: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  jsonInput: {
+    minHeight: 200,
+    marginBottom: 20,
+    backgroundColor: '#F9FAFB',
+  },
+  instructionHelp: {
+    backgroundColor: '#FEF3C7',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  helpText: {
+    fontSize: 12,
+    color: '#92400E',
+    marginBottom: 4,
+    lineHeight: 16,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    padding: 20,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  cancelButton: {
+    flex: 1,
+  },
+  saveButton: {
+    flex: 1,
+    backgroundColor: '#4F46E5',
   },
 });

@@ -1,28 +1,50 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- 网络访问权限 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 保持设备唤醒权限 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 禁用锁屏权限 -->
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+    <!-- 系统悬浮窗权限 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- 查询所有应用包名权限 -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- 开机自启动权限 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- Android 12+ 前台服务权限（可选，高频任务需要） -->
+    <!-- 前台服务基础权限 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- 数据同步类型前台服务权限 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- 通知权限（Android 13+必需） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 特殊用途前台服务权限 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
 
     <!-- Android 11+ 软件包可见性声明 -->
     <queries>
-        <!-- 声明需要查询的特定包名 -->
-        <package android:name="com.tencent.mm" /> <!-- 微信 -->
-        <package android:name="com.eg.android.AlipayGphone" /> <!-- 支付宝 -->
-        <package android:name="com.tencent.mobileqq" /> <!-- QQ -->
-        
-        <!-- 或者声明支持启动 Intent 的应用 -->
+        <!-- 声明支持启动 Intent 的所有应用（推荐方式） -->
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        
+        <!-- 声明支持浏览器应用 -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
+        </intent>
+        
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        
+        <!-- 声明支持分享应用 -->
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="text/plain" />
         </intent>
     </queries>
 
@@ -69,7 +91,8 @@
 
       <service 
           android:name="com.asterinet.react.bgactions.BackgroundActionsService" 
-          android:exported="false" />
+          android:exported="false"
+          android:foregroundServiceType="dataSync|specialUse" />
 
     </application>
 </manifest>
