@@ -18,6 +18,7 @@ class MainApplication : Application(), ReactApplication {
           add(WakeScreenPackage())
           add(TouchSimulationPackage())
           add(AppLauncherPackage())
+          add(BackgroundTaskPackage())
         },
     )
   }

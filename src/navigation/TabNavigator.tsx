@@ -4,7 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 import TaskScreen from '../modules/Task/index.tsx';
 import LogsScreen from '../modules/Logs/index.tsx';
-import SetScreen from '../modules/Set/index.js';
+import SetScreen from '../modules/Set/index.tsx';
 import { Icon } from 'react-native-paper';
 
 

@@ -20,6 +20,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- 特殊用途前台服务权限 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- 忽略电池优化权限 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
 
     <!-- Android 11+ 软件包可见性声明 -->
@@ -89,10 +91,17 @@
             android:resource="@xml/accessibility_service_config" />
       </service>
 
+      <service
+          android:name=".ForegroundRunningService"
+          android:foregroundServiceType="dataSync" />
+
+      <service
+          android:name=".TaskHeadlessJsService"
+          android:exported="false" />
+
       <service 
           android:name="com.asterinet.react.bgactions.BackgroundActionsService" 
-          android:exported="false"
-          android:foregroundServiceType="dataSync|specialUse" />
+          android:exported="false" />
 
     </application>
 </manifest>

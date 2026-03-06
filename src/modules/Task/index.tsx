@@ -163,21 +163,15 @@ export default function TaskScreen() {
 
   useEffect(() => {
     // 初始化时添加一些示例任务
-    BackgroundTaskManager.addTask('wakeup', '唤醒屏幕', '08:30', async () => {
+    BackgroundTaskManager.addTask('wakeup', '唤醒屏幕', '00:51', async () => {
       try {
-        await WakeScreenModule.wakeUp();
+        console.log(111);
+        
+        await WakeScreenModule.wakeUp(false);
+        console.log(222);
         await LogManager.addLog('屏幕已唤醒', 'success', '唤醒任务');
       } catch (error: any) {
         await LogManager.addLog(`唤醒失败: ${error.message}`, 'error', '唤醒任务');
-      }
-    });
-
-    BackgroundTaskManager.addTask('screenshot', '定时截图', '09:00', async () => {
-      try {
-        await LogManager.addLog('开始定时截图', 'info', '截图任务');
-        // 这里可以添加截图逻辑
-      } catch (error: any) {
-        await LogManager.addLog(`截图失败: ${error.message}`, 'error', '截图任务');
       }
     });
 
@@ -189,8 +183,9 @@ export default function TaskScreen() {
     });
 
     return () => {
-      BackgroundTaskManager.clearTasks();
-      BackgroundTaskManager.clearInstructionTasks();
+      // 优化：不要在页面销毁时清空任务，否则后台服务将无任务可跑
+      // BackgroundTaskManager.clearTasks();
+      // BackgroundTaskManager.clearInstructionTasks();
     };
   }, []);
 
@@ -290,8 +285,8 @@ export default function TaskScreen() {
 
     BackgroundTimer.setTimeout(() => {
       LogManager.addLog('触发定时器，正在唤醒屏幕...', 'info', '测试任务');
-      console.log('Background timer triggered! Calling native wakeScreen...');
-      WakeScreenModule.wakeScreen();
+      console.log('Background timer triggered! Calling native wakeUp...');
+      WakeScreenModule.wakeUp();
       
       // 亮屏后延迟 1 秒执行上滑动作
       BackgroundTimer.setTimeout(() => {
@@ -303,8 +298,9 @@ export default function TaskScreen() {
       
     }, ms);
   };
+
 const requestForegroundPermission = async () => {
-  if (Platform.OS === 'android' && Platform.Version >= 33) {
+  if (Platform.OS === 'android') {
     try {
       const permissionsToRequest = [];
 
@@ -312,25 +308,22 @@ const requestForegroundPermission = async () => {
         permissionsToRequest.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
       }
 
-      if (permissionsToRequest.length === 0) {
-        return true;
+      if (permissionsToRequest.length > 0) {
+        const results = await PermissionsAndroid.requestMultiple(permissionsToRequest);
+        const allGranted = Object.values(results).every(
+          result => result === PermissionsAndroid.RESULTS.GRANTED
+        );
+        if (!allGranted) {
+          console.warn('部分权限未授予:', results);
+        }
       }
 
-      const results = await PermissionsAndroid.requestMultiple(permissionsToRequest);
-
-      const allGranted = Object.values(results).every(
-        result => result === PermissionsAndroid.RESULTS.GRANTED
-      );
-
-      if (!allGranted) {
-        const deniedPermissions = Object.entries(results)
-          .filter(([_, result]) => result !== PermissionsAndroid.RESULTS.GRANTED)
-          .map(([permission]) => permission);
-        
-        console.warn('部分权限未授予:', deniedPermissions);
+      // 引导用户开启忽略电池优化
+      if (WakeScreenModule && WakeScreenModule.requestIgnoreBatteryOptimizations) {
+        WakeScreenModule.requestIgnoreBatteryOptimizations();
       }
 
-      return allGranted;
+      return true;
     } catch (err) {
       console.error('权限申请失败：', err);
       return false;

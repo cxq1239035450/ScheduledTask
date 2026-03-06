@@ -1,6 +1,5 @@
-import { Platform, PermissionsAndroid } from 'react-native';
-import AppLauncherModule from '../modules/NativeModules/AppLauncherModule';
-
+import { Platform, PermissionsAndroid, NativeModules } from 'react-native';
+const {  AppLauncherModule } = NativeModules;
 interface AppInfo {
   label: string;
   packageName: string;
