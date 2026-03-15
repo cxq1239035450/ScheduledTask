@@ -93,6 +93,205 @@ class TouchSimulationModule(reactContext: ReactApplicationContext) : ReactContex
     }
 
     /**
+     * 模拟下滑动作
+     */
+    @ReactMethod
+    fun simulateSwipeDown() {
+        val service = TouchSimulationService.getInstance()
+        
+        if (service != null) {
+            // 方式 A：使用辅助功能模拟（推荐，无 Root 要求）
+            val displayMetrics = reactApplicationContext.resources.displayMetrics
+            val width = displayMetrics.widthPixels
+            val height = displayMetrics.heightPixels
+
+            val startX = width / 2
+            val startY = (height * 0.2).toInt()
+            val endX = width / 2
+            val endY = (height * 0.8).toInt()
+            val duration = 300L
+
+            val success = service.performGesture(startX, startY, endX, endY, duration)
+            if (success) {
+                showToast("辅助功能模拟下滑中...")
+                return
+            }
+        }
+
+        // 方式 B：使用 Shell 命令模拟（备份方案，通常需要 Root）
+        Thread {
+            try {
+                val displayMetrics = reactApplicationContext.resources.displayMetrics
+                val width = displayMetrics.widthPixels
+                val height = displayMetrics.heightPixels
+
+                val startX = width / 2
+                val startY = (height * 0.2).toInt()
+                val endX = width / 2
+                val endY = (height * 0.8).toInt()
+                val duration = 300
+
+                val command = "input swipe $startX $startY $endX $endY $duration"
+                val process = Runtime.getRuntime().exec(command)
+                val result = process.waitFor()
+
+                if (result == 0) {
+                    showToast("Root/Shell 下滑已模拟")
+                } else {
+                    showToast("模拟下滑失败：请开启辅助功能")
+                    Log.w("TouchSimulationModule", "Shell swipe failed, and service is not running")
+                }
+            } catch (e: Exception) {
+                Log.e("TouchSimulationModule", "Failed to simulate swipe", e)
+            }
+        }.start()
+    }
+
+    /**
+     * 模拟左滑动作
+     */
+    @ReactMethod
+    fun simulateSwipeLeft() {
+        val service = TouchSimulationService.getInstance()
+        
+        if (service != null) {
+            // 方式 A：使用辅助功能模拟（推荐，无 Root 要求）
+            val displayMetrics = reactApplicationContext.resources.displayMetrics
+            val width = displayMetrics.widthPixels
+            val height = displayMetrics.heightPixels
+
+            val startX = (width * 0.8).toInt()
+            val startY = height / 2
+            val endX = (width * 0.2).toInt()
+            val endY = height / 2
+            val duration = 300L
+
+            val success = service.performGesture(startX, startY, endX, endY, duration)
+            if (success) {
+                showToast("辅助功能模拟左滑中...")
+                return
+            }
+        }
+
+        // 方式 B：使用 Shell 命令模拟（备份方案，通常需要 Root）
+        Thread {
+            try {
+                val displayMetrics = reactApplicationContext.resources.displayMetrics
+                val width = displayMetrics.widthPixels
+                val height = displayMetrics.heightPixels
+
+                val startX = (width * 0.8).toInt()
+                val startY = height / 2
+                val endX = (width * 0.2).toInt()
+                val endY = height / 2
+                val duration = 300
+
+                val command = "input swipe $startX $startY $endX $endY $duration"
+                val process = Runtime.getRuntime().exec(command)
+                val result = process.waitFor()
+
+                if (result == 0) {
+                    showToast("Root/Shell 左滑已模拟")
+                } else {
+                    showToast("模拟左滑失败：请开启辅助功能")
+                    Log.w("TouchSimulationModule", "Shell swipe failed, and service is not running")
+                }
+            } catch (e: Exception) {
+                Log.e("TouchSimulationModule", "Failed to simulate swipe", e)
+            }
+        }.start()
+    }
+
+    /**
+     * 模拟右滑动作
+     */
+    @ReactMethod
+    fun simulateSwipeRight() {
+        val service = TouchSimulationService.getInstance()
+        
+        if (service != null) {
+            // 方式 A：使用辅助功能模拟（推荐，无 Root 要求）
+            val displayMetrics = reactApplicationContext.resources.displayMetrics
+            val width = displayMetrics.widthPixels
+            val height = displayMetrics.heightPixels
+
+            val startX = (width * 0.2).toInt()
+            val startY = height / 2
+            val endX = (width * 0.8).toInt()
+            val endY = height / 2
+            val duration = 300L
+
+            val success = service.performGesture(startX, startY, endX, endY, duration)
+            if (success) {
+                showToast("辅助功能模拟右滑中...")
+                return
+            }
+        }
+
+        // 方式 B：使用 Shell 命令模拟（备份方案，通常需要 Root）
+        Thread {
+            try {
+                val displayMetrics = reactApplicationContext.resources.displayMetrics
+                val width = displayMetrics.widthPixels
+                val height = displayMetrics.heightPixels
+
+                val startX = (width * 0.2).toInt()
+                val startY = height / 2
+                val endX = (width * 0.8).toInt()
+                val endY = height / 2
+                val duration = 300
+
+                val command = "input swipe $startX $startY $endX $endY $duration"
+                val process = Runtime.getRuntime().exec(command)
+                val result = process.waitFor()
+
+                if (result == 0) {
+                    showToast("Root/Shell 右滑已模拟")
+                } else {
+                    showToast("模拟右滑失败：请开启辅助功能")
+                    Log.w("TouchSimulationModule", "Shell swipe failed, and service is not running")
+                }
+            } catch (e: Exception) {
+                Log.e("TouchSimulationModule", "Failed to simulate swipe", e)
+            }
+        }.start()
+    }
+
+    /**
+     * 模拟自定义滑动动作
+     */
+    @ReactMethod
+    fun simulateSwipe(startX: Int, startY: Int, endX: Int, endY: Int, duration: Double) {
+        val service = TouchSimulationService.getInstance()
+        
+        if (service != null) {
+            val success = service.performGesture(startX, startY, endX, endY, duration.toLong())
+            if (success) {
+                showToast("辅助功能模拟滑动中...")
+                return
+            }
+        }
+
+        // 方式 B：使用 Shell 命令模拟（备份方案，通常需要 Root）
+        Thread {
+            try {
+                val command = "input swipe $startX $startY $endX $endY ${duration.toLong()}"
+                val process = Runtime.getRuntime().exec(command)
+                val result = process.waitFor()
+
+                if (result == 0) {
+                    showToast("Root/Shell 滑动已模拟")
+                } else {
+                    showToast("模拟滑动失败：请开启辅助功能")
+                    Log.w("TouchSimulationModule", "Shell swipe failed, and service is not running")
+                }
+            } catch (e: Exception) {
+                Log.e("TouchSimulationModule", "Failed to simulate swipe", e)
+            }
+        }.start()
+    }
+
+    /**
      * 模拟点击动作
      */
     @ReactMethod

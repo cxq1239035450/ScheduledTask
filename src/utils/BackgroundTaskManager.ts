@@ -3,19 +3,21 @@ import LogManager from './LogManager';
 import TaskInstructionExecutor from './TaskInstructionExecutor';
 import { Task } from '../types/TaskInstruction';
 
-const { BackgroundTaskModule } = NativeModules;
+const { BackgroundTaskModule, WakeScreenModule, TouchSimulationModule, AppLauncherModule } = NativeModules;
+
+interface ExecutionStep {
+    type: 'wake_up' | 'click' | 'launch_app' | 'wait' | 'swipe' | 'input_text' | 'screenshot' | 'log' | string;
+    waitTime?: number;
+    parameters?: Record<string, any>;
+}
 
 interface ScheduledTask {
     id: string;
     name: string;
     time: string;
-    execute: () => Promise<void> | void;
+    instruction: ExecutionStep[];
     lastExecuted?: Date;
     enabled: boolean;
-}
-
-interface InstructionTask extends ScheduledTask {
-    taskData: Task;
 }
 
 const defaultOptions = {
@@ -27,7 +29,6 @@ class BackgroundTaskManager {
     private static instance: BackgroundTaskManager;
     private isRunning: boolean = false;
     private tasks: Map<string, ScheduledTask> = new Map();
-    private instructionTasks: Map<string, InstructionTask> = new Map();
     private tickSubscription: any = null;
 
     private constructor() {
@@ -43,7 +44,7 @@ class BackgroundTaskManager {
         });
     }
 
-    private async syncToNative() {
+    public async syncToNative() {
         if (!BackgroundTaskModule) {
             console.error('BackgroundTaskManager: BackgroundTaskModule is null');
             return;
@@ -54,11 +55,9 @@ class BackgroundTaskManager {
             return;
         }
 
-        const allTasks = [
-            ...Array.from(this.tasks.values()),
-            ...Array.from(this.instructionTasks.values())
-        ].filter(t => t.enabled)
-         .map(t => ({ id: t.id, time: t.time }));
+        const allTasks = Array.from(this.tasks.values())
+            .filter(t => t.enabled)
+            .map(t => ({ id: t.id, time: t.time }));
         
         try {
             await BackgroundTaskModule.syncTasks(allTasks);
@@ -67,37 +66,153 @@ class BackgroundTaskManager {
         }
     }
 
+    private async executeStep(step: ExecutionStep, taskName: string): Promise<void> {
+        const { type, waitTime, parameters } = step;
+
+        if (waitTime) {
+            console.log(`BackgroundTaskManager: 等待 ${waitTime}ms`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+
+        switch (type) {
+            case 'wake_up':
+                console.log(`BackgroundTaskManager: 执行 wake_up`);
+                await WakeScreenModule.wakeUp(parameters?.enableKeyguard ?? false);
+                await LogManager.addLog('屏幕已唤醒', 'success', taskName);
+                break;
+
+            case 'click':
+                console.log(`BackgroundTaskManager: 执行 click`, parameters);
+                try {
+                    // 检查辅助功能服务是否可用
+                    const isAccessibilityEnabled = await TouchSimulationModule.isAccessibilityServiceEnabled();
+                    if (!isAccessibilityEnabled) {
+                        throw new Error('辅助功能服务未启用，请在系统设置中开启 TouchSimulationService');
+                    }
+                    await TouchSimulationModule.simulateClick(
+                        parameters?.x ?? 0,
+                        parameters?.y ?? 0,
+                        parameters?.duration ?? 100
+                    );
+                    await LogManager.addLog(`点击操作完成 (${parameters?.x}, ${parameters?.y})`, 'success', taskName);
+                } catch (error: any) {
+                    console.error('点击操作失败:', error);
+                    await LogManager.addLog(`点击操作失败: ${error.message}`, 'error', taskName);
+                    throw error;
+                }
+                break;
+
+            case 'swipe':
+                console.log(`BackgroundTaskManager: 执行 swipe`, parameters);
+                try {
+                    // 检查辅助功能服务是否可用
+                    const isAccessibilityEnabled = await TouchSimulationModule.isAccessibilityServiceEnabled();
+                    if (!isAccessibilityEnabled) {
+                        throw new Error('辅助功能服务未启用，请在系统设置中开启 TouchSimulationService');
+                    }
+                    if (parameters?.direction === 'up') {
+                        await TouchSimulationModule.simulateSwipeUp();
+                    } else if (parameters?.direction === 'down') {
+                        await TouchSimulationModule.simulateSwipeDown();
+                    } else if (parameters?.direction === 'left') {
+                        await TouchSimulationModule.simulateSwipeLeft();
+                    } else if (parameters?.direction === 'right') {
+                        await TouchSimulationModule.simulateSwipeRight();
+                    } else {
+                        await TouchSimulationModule.simulateSwipe(
+                            parameters?.startX ?? 0,
+                            parameters?.startY ?? 0,
+                            parameters?.endX ?? 0,
+                            parameters?.endY ?? 0,
+                            parameters?.duration ?? 500
+                        );
+                    }
+                    await LogManager.addLog(`滑动操作完成 (${parameters?.direction || '自定义'})`, 'success', taskName);
+                } catch (error: any) {
+                    console.error('滑动操作失败:', error);
+                    await LogManager.addLog(`滑动操作失败: ${error.message}`, 'error', taskName);
+                    throw error;
+                }
+                break;
+
+            case 'launch_app':
+                console.log(`BackgroundTaskManager: 执行 launch_app`, parameters);
+                const success = await AppLauncherModule.launchApp(
+                    parameters?.packageName,
+                    parameters?.userId ?? 0
+                );
+                if (success) {
+                    await LogManager.addLog(`应用启动成功: ${parameters?.packageName}`, 'success', taskName);
+                } else {
+                    throw new Error(`应用启动失败: ${parameters?.packageName}`);
+                }
+                break;
+
+            case 'close_app':
+                console.log(`BackgroundTaskManager: 执行 close_app`, parameters);
+                const closeSuccess = await AppLauncherModule.closeApp(
+                    parameters?.packageName,
+                    parameters?.userId ?? 0
+                );
+                if (closeSuccess) {
+                    await LogManager.addLog(`应用关闭成功: ${parameters?.packageName}`, 'success', taskName);
+                } else {
+                    throw new Error(`应用关闭失败: ${parameters?.packageName}`);
+                }
+                break;
+
+            case 'wait':
+                console.log(`BackgroundTaskManager: 执行 wait`, parameters);
+                const duration = parameters?.duration ?? 1000;
+                await new Promise(resolve => setTimeout(resolve, duration));
+                await LogManager.addLog(`等待完成: ${duration}ms`, 'info', taskName);
+                break;
+
+            case 'screenshot':
+                console.log(`BackgroundTaskManager: 执行 screenshot`, parameters);
+                await LogManager.addLog(`截图操作: ${parameters?.filename || '默认文件名'}`, 'info', taskName);
+                break;
+
+            case 'log':
+                console.log(`BackgroundTaskManager: 执行 log`, parameters);
+                await LogManager.addLog(
+                    parameters?.message ?? '',
+                    parameters?.level ?? 'info',
+                    taskName
+                );
+                break;
+
+            default:
+                console.warn(`BackgroundTaskManager: 未知的步骤类型: ${type}`);
+                await LogManager.addLog(`未知操作类型: ${type}`, 'warning', taskName);
+        }
+    }
+
     public async executeTaskById(taskId: string) {
-        const task = this.tasks.get(taskId) || this.instructionTasks.get(taskId);
+        const task = this.tasks.get(taskId);
         if (!task || !task.enabled) return;
 
         const now = new Date();
         try {
-            const isInstruction = 'taskData' in task;
-            const taskType = isInstruction ? '指令任务' : '定时任务';
-            
-            console.log(`BackgroundTaskManager: 正在执行${taskType} ${task.name} (${task.time})`);
-            await LogManager.addLog(`执行${taskType}: ${task.name}`, 'info', task.name);
-            
+            console.log(`BackgroundTaskManager: 正在执行定时任务 ${task.name} (${task.time})`);
+            await LogManager.addLog(`执行定时任务: ${task.name}`, 'info', task.name);
+
             await BackgroundTaskModule.updateNotification({
                 taskDesc: `正在执行: ${task.name}`
             });
 
-            if (isInstruction) {
-                const result = await TaskInstructionExecutor.executeTask(
-                    (task as InstructionTask).taskData.id,
-                    (task as InstructionTask).taskData.instruction
-                );
-                if (result.success) {
-                    await LogManager.addLog(`指令执行成功: ${task.name}`, 'success', task.name);
-                } else {
-                    throw new Error(result.error || '未知错误');
-                }
-            } else {
-                await (task as ScheduledTask).execute();
-                await LogManager.addLog(`任务执行成功: ${task.name}`, 'success', task.name);
+            // 执行定时任务
+            for (let i = 0; i < task.instruction.length; i++) {
+                const step = task.instruction[i];
+                console.log(`BackgroundTaskManager: 执行步骤 ${i + 1}/${task.instruction.length}`);
+                await BackgroundTaskModule.updateNotification({
+                    taskDesc: `正在执行: ${task.name} (${i + 1}/${task.instruction.length})`
+                });
+                await this.executeStep(step, task.name);
+                await new Promise(resolve => setTimeout(resolve, step.waitTime ?? 1000));
             }
-            
+            await LogManager.addLog(`任务执行成功: ${task.name}`, 'success', task.name);
+
             task.lastExecuted = now;
         } catch (error: any) {
             console.error(`BackgroundTaskManager: 任务 ${task.name} 执行失败`, error);
@@ -109,10 +224,7 @@ class BackgroundTaskManager {
 
     private async updateNotificationStatus() {
         try {
-            const allTasks = [
-                ...Array.from(this.tasks.values()),
-                ...Array.from(this.instructionTasks.values())
-            ].filter(t => t.enabled);
+            const allTasks = Array.from(this.tasks.values()).filter(t => t.enabled);
 
             let nextTaskTimeStr = '无待处理任务';
             let earliestNextTask: Date | null = null;
@@ -194,16 +306,18 @@ class BackgroundTaskManager {
         return this.isRunning;
     }
 
-    public addTask(id: string, name: string, time: string, execute: () => Promise<void> | void): void {
+    // 统一的任务添加方法
+    public addTask(id: string, name: string, time: string, instruction: ExecutionStep[], enabled: boolean = true): void {
         const task: ScheduledTask = {
             id,
             name,
             time,
-            execute,
-            enabled: true
+            instruction,
+            enabled,
+            lastExecuted: undefined
         };
         this.tasks.set(id, task);
-        console.log(`BackgroundTaskManager: 已添加任务 ${name} (${time})`);
+        console.log(`BackgroundTaskManager: 已添加定时任务 ${name} (${time})`);
         this.syncToNative();
     }
 
@@ -252,80 +366,7 @@ class BackgroundTaskManager {
         this.syncToNative();
     }
 
-    // 指令任务管理方法
-    public addInstructionTask(task: Task): void {
-        const instructionTask: InstructionTask = {
-            id: task.id,
-            name: task.title,
-            time: task.time,
-            execute: async () => {
-                // 这个execute方法不会被调用，实际执行在taskRunner中处理
-            },
-            enabled: task.enabled,
-            taskData: task
-        };
-        this.instructionTasks.set(task.id, instructionTask);
-        console.log(`BackgroundTaskManager: 已添加指令任务 ${task.title} (${task.time})`);
-        this.syncToNative();
-    }
-
-    public removeInstructionTask(id: string): boolean {
-        const removed = this.instructionTasks.delete(id);
-        if (removed) {
-            console.log(`BackgroundTaskManager: 已移除指令任务 ${id}`);
-            this.syncToNative();
-        }
-        return removed;
-    }
-
-    public updateInstructionTask(task: Task): void {
-        const existingTask = this.instructionTasks.get(task.id);
-        if (existingTask) {
-            existingTask.name = task.title;
-            existingTask.time = task.time;
-            existingTask.enabled = task.enabled;
-            existingTask.taskData = task;
-            console.log(`BackgroundTaskManager: 已更新指令任务 ${task.title}`);
-        } else {
-            this.addInstructionTask(task);
-        }
-        this.syncToNative();
-    }
-
-    public enableInstructionTask(id: string): boolean {
-        const task = this.instructionTasks.get(id);
-        if (task) {
-            task.enabled = true;
-            console.log(`BackgroundTaskManager: 已启用指令任务 ${task.name}`);
-            this.syncToNative();
-            return true;
-        }
-        return false;
-    }
-
-    public disableInstructionTask(id: string): boolean {
-        const task = this.instructionTasks.get(id);
-        if (task) {
-            task.enabled = false;
-            console.log(`BackgroundTaskManager: 已禁用指令任务 ${task.name}`);
-            this.syncToNative();
-            return true;
-        }
-        return false;
-    }
-
-    public getInstructionTask(id: string): InstructionTask | undefined {
-        return this.instructionTasks.get(id);
-    }
-
-    public getAllInstructionTasks(): InstructionTask[] {
-        return Array.from(this.instructionTasks.values());
-    }
-
-    public clearInstructionTasks(): void {
-        this.instructionTasks.clear();
-        console.log('BackgroundTaskManager: 已清空所有指令任务');
-    }
+    
 }
 
 export default BackgroundTaskManager.getInstance();

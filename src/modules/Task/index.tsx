@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, NativeModules, Alert, Modal, ScrollView, PermissionsAndroid, Platform } from 'react-native';
 import { Icon, FAB, Card, Switch, Button, List, Searchbar, Divider, TextInput } from 'react-native-paper';
-import BackgroundTimer from 'react-native-background-timer';
 import BackgroundTaskManager from '../../utils/BackgroundTaskManager';
 import LogManager from '../../utils/LogManager';
 import AppManager from '../../utils/AppManager';
@@ -26,44 +25,6 @@ const EXAMPLE_TASKS: Task[] = [
     status: 'running',
     type: 'daily',
     instruction: [
-      {
-        id: 'wake_up',
-        type: 'log',
-        level: 'info',
-        message: '开始执行钉钉打卡任务'
-      },
-      {
-        id: 'launch_dingtalk',
-        type: 'launch_app',
-        packageName: 'com.alibaba.android.rimet',
-        waitForLaunch: 3000
-      },
-      {
-        id: 'swipe_unlock',
-        type: 'swipe',
-        direction: 'up',
-        distance: 200,
-        duration: 500
-      },
-      {
-        id: 'wait_for_load',
-        type: 'wait',
-        duration: 2000
-      },
-      {
-        id: 'click_attendance',
-        type: 'click',
-        target: {
-          type: 'text',
-          value: '打卡'
-        }
-      },
-      {
-        id: 'log_success',
-        type: 'log',
-        level: 'success',
-        message: '钉钉打卡任务执行完成'
-      }
     ],
     enabled: true
   }
@@ -163,36 +124,45 @@ export default function TaskScreen() {
 
   useEffect(() => {
     // 初始化时添加一些示例任务
-    BackgroundTaskManager.addTask('wakeup', '唤醒屏幕', '00:51', async () => {
-      try {
-        console.log(111);
-        
-        await WakeScreenModule.wakeUp(false);
-        console.log(222);
-        await LogManager.addLog('屏幕已唤醒', 'success', '唤醒任务');
-      } catch (error: any) {
-        await LogManager.addLog(`唤醒失败: ${error.message}`, 'error', '唤醒任务');
-      }
-    });
-
-    // 将现有指令任务同步到BackgroundTaskManager
-    tasks.forEach(task => {
-      if (task.enabled) {
-        BackgroundTaskManager.addInstructionTask(task);
-      }
-    });
+    BackgroundTaskManager.addTask(
+      'wakeup',
+      '唤醒屏幕',
+      '23:15',
+      [
+        // {
+        //   type: 'wake_up',
+        //   parameters: { level: 'info', message: '开始执行唤醒任务' },
+        //   waitTime: 5000
+        // },
+        {
+          type: 'swipe',
+          parameters: { direction: 'up' },
+          waitTime: 5000
+        },
+        {
+          type: 'launch_app',
+          // parameters: { packageName: 'com.alibaba.android.rimet' }
+          parameters: { packageName: 'com.alibaba.android.rimet' },
+          waitTime: 5000
+        },
+        {
+          type: 'close_app',
+          // parameters: { packageName: 'com.alibaba.android.rimet' }
+          parameters: { packageName: 'com.alibaba.android.rimet' },
+          waitTime: 5000
+        },
+      ]
+    );
 
     return () => {
-      // 优化：不要在页面销毁时清空任务，否则后台服务将无任务可跑
-      // BackgroundTaskManager.clearTasks();
-      // BackgroundTaskManager.clearInstructionTasks();
+
     };
   }, []);
 
   const handleToggle = (id: string) => {
     setTasks(prev => prev.map(task => {
       if (task.id === id) {
-        const newStatus = task.status === 'stopped' ? 'running' : 'stopped';
+        const newStatus: 'running' | 'stopped' = task.status === 'stopped' ? 'running' : 'stopped';
         const updatedTask = {
           ...task,
           status: newStatus,
@@ -201,9 +171,9 @@ export default function TaskScreen() {
 
         // 同步到BackgroundTaskManager
         if (newStatus === 'running') {
-          BackgroundTaskManager.enableInstructionTask(task.id);
+          BackgroundTaskManager.enableTask(task.id);
         } else {
-          BackgroundTaskManager.disableInstructionTask(task.id);
+          BackgroundTaskManager.disableTask(task.id);
         }
 
         return updatedTask;
@@ -256,7 +226,12 @@ export default function TaskScreen() {
 
       // 同步到BackgroundTaskManager
       const updatedTask = { ...editingTask, instruction: instructions };
-      BackgroundTaskManager.updateInstructionTask(updatedTask);
+      // 更新任务指令列表
+      const existingTask = BackgroundTaskManager.getTask(updatedTask.id);
+      if (existingTask) {
+        existingTask.list = instructions;
+        BackgroundTaskManager.syncToNative();
+      }
 
       setInstructionEditorVisible(false);
       setEditingTask(null);
@@ -283,20 +258,20 @@ export default function TaskScreen() {
     console.log(`Setting background timer for ${minutes} minutes (${ms}ms)...`);
     Alert.alert('已设置', `系统将在 ${minutes} 分钟后自动亮屏。请保持应用在后台运行，不要彻底关闭。`);
 
-    BackgroundTimer.setTimeout(() => {
-      LogManager.addLog('触发定时器，正在唤醒屏幕...', 'info', '测试任务');
-      console.log('Background timer triggered! Calling native wakeUp...');
-      WakeScreenModule.wakeUp();
+    // BackgroundTimer.setTimeout(() => {
+    //   LogManager.addLog('触发定时器，正在唤醒屏幕...', 'info', '测试任务');
+    //   console.log('Background timer triggered! Calling native wakeUp...');
+    //   WakeScreenModule.wakeUp(false);
       
-      // 亮屏后延迟 1 秒执行上滑动作
-      BackgroundTimer.setTimeout(() => {
-        LogManager.addLog('正在模拟上滑动作...', 'info', '测试任务');
-        console.log('Calling native TouchSimulationModule.simulateSwipeUp...');
-        TouchSimulationModule.simulateSwipeUp();
-        LogManager.addLog('上滑动作已执行', 'success', '测试任务');
-      }, 1000);
+    //   // 亮屏后延迟 1 秒执行上滑动作
+    //   BackgroundTimer.setTimeout(() => {
+    //     LogManager.addLog('正在模拟上滑动作...', 'info', '测试任务');
+    //     console.log('Calling native TouchSimulationModule.simulateSwipeUp...');
+    //     TouchSimulationModule.simulateSwipeUp();
+    //     LogManager.addLog('上滑动作已执行', 'success', '测试任务');
+    //   }, 2000);
       
-    }, ms);
+    // }, ms);
   };
 
 const requestForegroundPermission = async () => {

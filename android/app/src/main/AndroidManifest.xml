@@ -22,8 +22,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- 忽略电池优化权限 -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-
-
+    <!-- 关闭指定应用 -->
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES"/>
     <!-- Android 11+ 软件包可见性声明 -->
     <queries>
         <!-- 声明支持启动 Intent 的所有应用（推荐方式） -->
@@ -97,10 +97,6 @@
 
       <service
           android:name=".TaskHeadlessJsService"
-          android:exported="false" />
-
-      <service 
-          android:name="com.asterinet.react.bgactions.BackgroundActionsService" 
           android:exported="false" />
 
     </application>

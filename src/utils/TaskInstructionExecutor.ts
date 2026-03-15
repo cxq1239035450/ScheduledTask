@@ -232,22 +232,34 @@ class TaskInstructionExecutor {
       '指令执行'
     );
 
-    if (instruction.target.type === 'coordinate') {
-      const point = instruction.target.value as { x: number; y: number };
-      
-      if (instruction.longPress) {
-        await TouchSimulationModule.simulateLongPress(
-          point.x,
-          point.y,
-          instruction.duration || 1000
-        );
-      } else {
-        await TouchSimulationModule.simulateClick(point.x, point.y);
+    try {
+      // 检查辅助功能服务是否可用
+      const isAccessibilityEnabled = await TouchSimulationModule.isAccessibilityServiceEnabled();
+      if (!isAccessibilityEnabled) {
+        throw new Error('辅助功能服务未启用，请在系统设置中开启 TouchSimulationService');
       }
-    } else {
-      // 这里需要实现基于文本、ID或描述的点击逻辑
-      // 暂时使用模拟实现
-      await TouchSimulationModule.simulateClick(500, 500);
+
+      if (instruction.target.type === 'coordinate') {
+        const point = instruction.target.value as { x: number; y: number };
+        
+        if (instruction.longPress) {
+          await TouchSimulationModule.simulateClick(point.x, point.y);
+          await this.sleep(instruction.duration || 1000);
+        } else {
+          await TouchSimulationModule.simulateClick(point.x, point.y);
+        }
+      } else {
+        // 这里需要实现基于文本、ID或描述的点击逻辑
+        // 暂时使用模拟实现
+        await TouchSimulationModule.simulateClick(500, 500);
+      }
+    } catch (error: any) {
+      await LogManager.addLog(
+        `点击操作失败: ${error.message}`,
+        'error',
+        '指令执行'
+      );
+      throw error;
     }
   }
 
@@ -261,17 +273,47 @@ class TaskInstructionExecutor {
       '指令执行'
     );
 
-    if (instruction.direction === 'custom' && instruction.startPoint && instruction.endPoint) {
-      await TouchSimulationModule.simulateSwipe(
-        instruction.startPoint.x,
-        instruction.startPoint.y,
-        instruction.endPoint.x,
-        instruction.endPoint.y,
-        instruction.duration || 500
+    try {
+      // 检查辅助功能服务是否可用
+      const isAccessibilityEnabled = await TouchSimulationModule.isAccessibilityServiceEnabled();
+      if (!isAccessibilityEnabled) {
+        throw new Error('辅助功能服务未启用，请在系统设置中开启 TouchSimulationService');
+      }
+
+      if (instruction.direction === 'custom' && instruction.startPoint && instruction.endPoint) {
+        await TouchSimulationModule.simulateSwipe(
+          instruction.startPoint.x,
+          instruction.startPoint.y,
+          instruction.endPoint.x,
+          instruction.endPoint.y,
+          instruction.duration || 500
+        );
+      } else {
+        // 根据方向调用相应的滑动方法
+        switch (instruction.direction) {
+          case 'up':
+            await TouchSimulationModule.simulateSwipeUp();
+            break;
+          case 'down':
+            await TouchSimulationModule.simulateSwipeDown();
+            break;
+          case 'left':
+            await TouchSimulationModule.simulateSwipeLeft();
+            break;
+          case 'right':
+            await TouchSimulationModule.simulateSwipeRight();
+            break;
+          default:
+            throw new Error(`不支持的滑动方向: ${instruction.direction}`);
+        }
+      }
+    } catch (error: any) {
+      await LogManager.addLog(
+        `滑动操作失败: ${error.message}`,
+        'error',
+        '指令执行'
       );
-    } else {
-      // 预设方向的滑动
-      await TouchSimulationModule.simulateSwipeUp();
+      throw error;
     }
   }
 

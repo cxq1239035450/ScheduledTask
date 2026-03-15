@@ -125,10 +125,27 @@ class AppManager {
         return false;
       }
 
-      AppLauncherModule.launchApp(packageName, userId);
-      return true;
+      return await AppLauncherModule.launchApp(packageName, userId);
     } catch (error) {
       console.error('启动应用失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 关闭应用
+   */
+  public async closeApp(packageName: string, userId: number = 0): Promise<boolean> {
+    try {
+      const isInstalled = await this.isAppInstalled(packageName);
+      if (!isInstalled) {
+        console.warn(`应用 ${packageName} 未安装`);
+        return false;
+      }
+
+      return AppLauncherModule.closeApp(packageName, userId);
+    } catch (error) {
+      console.error('关闭应用失败:', error);
       return false;
     }
   }

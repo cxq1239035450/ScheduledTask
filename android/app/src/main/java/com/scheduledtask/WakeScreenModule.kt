@@ -38,7 +38,7 @@ class WakeScreenModule(reactContext: ReactApplicationContext) : ReactContextBase
      * 核心亮屏方法：使用 WakeLock 强制点亮屏幕
      */
     @ReactMethod
-    fun wakeUp(showActivity: Boolean = true) {
+    fun wakeUp(showActivity: Boolean = false) {
         Log.d("WakeScreenModule", "Attempting to wake screen (showActivity: $showActivity)...")
         val powerManager = reactApplicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
         
@@ -81,15 +81,6 @@ class WakeScreenModule(reactContext: ReactApplicationContext) : ReactContextBase
             Log.e("WakeScreenModule", "WakeUp error", e)
         }
     }
-
-    /**
-     * 旧方法兼容
-     */
-    @ReactMethod
-    fun wakeScreen() {
-        wakeUp()
-    }
-
     /**
      * 申请忽略电池优化，这对于 Android 14+ 的后台任务稳定性非常重要
      */
