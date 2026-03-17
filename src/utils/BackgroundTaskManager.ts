@@ -1,21 +1,15 @@
 import { NativeModules, DeviceEventEmitter } from 'react-native';
 import LogManager from './LogManager';
-import TaskInstructionExecutor from './TaskInstructionExecutor';
-import { Task } from '../types/TaskInstruction';
+import { TaskInstruction } from '../types/TaskInstruction';
 
 const { BackgroundTaskModule, WakeScreenModule, TouchSimulationModule, AppLauncherModule } = NativeModules;
 
-interface ExecutionStep {
-    type: 'wake_up' | 'click' | 'launch_app' | 'wait' | 'swipe' | 'input_text' | 'screenshot' | 'log' | string;
-    waitTime?: number;
-    parameters?: Record<string, any>;
-}
 
 interface ScheduledTask {
     id: string;
     name: string;
     time: string;
-    instruction: ExecutionStep[];
+    instruction: TaskInstruction[];
     lastExecuted?: Date;
     enabled: boolean;
 }
@@ -66,18 +60,17 @@ class BackgroundTaskManager {
         }
     }
 
-    private async executeStep(step: ExecutionStep, taskName: string): Promise<void> {
-        const { type, waitTime, parameters } = step;
-
-        if (waitTime) {
-            console.log(`BackgroundTaskManager: 等待 ${waitTime}ms`);
-            await new Promise(resolve => setTimeout(resolve, waitTime));
+    private async executeStep(step: TaskInstruction, taskName: string): Promise<void> {
+        const { type, delay, parameters } = step;
+        
+        if (delay) {
+            await new Promise(resolve => setTimeout(resolve, delay));
         }
 
         switch (type) {
             case 'wake_up':
                 console.log(`BackgroundTaskManager: 执行 wake_up`);
-                await WakeScreenModule.wakeUp(parameters?.enableKeyguard ?? false);
+                await WakeScreenModule.wakeUp(false);
                 await LogManager.addLog('屏幕已唤醒', 'success', taskName);
                 break;
 
@@ -168,20 +161,6 @@ class BackgroundTaskManager {
                 await LogManager.addLog(`等待完成: ${duration}ms`, 'info', taskName);
                 break;
 
-            case 'screenshot':
-                console.log(`BackgroundTaskManager: 执行 screenshot`, parameters);
-                await LogManager.addLog(`截图操作: ${parameters?.filename || '默认文件名'}`, 'info', taskName);
-                break;
-
-            case 'log':
-                console.log(`BackgroundTaskManager: 执行 log`, parameters);
-                await LogManager.addLog(
-                    parameters?.message ?? '',
-                    parameters?.level ?? 'info',
-                    taskName
-                );
-                break;
-
             default:
                 console.warn(`BackgroundTaskManager: 未知的步骤类型: ${type}`);
                 await LogManager.addLog(`未知操作类型: ${type}`, 'warning', taskName);
@@ -209,7 +188,7 @@ class BackgroundTaskManager {
                     taskDesc: `正在执行: ${task.name} (${i + 1}/${task.instruction.length})`
                 });
                 await this.executeStep(step, task.name);
-                await new Promise(resolve => setTimeout(resolve, step.waitTime ?? 1000));
+                await new Promise(resolve => setTimeout(resolve, step.delay ?? 1000));
             }
             await LogManager.addLog(`任务执行成功: ${task.name}`, 'success', task.name);
 
@@ -307,7 +286,7 @@ class BackgroundTaskManager {
     }
 
     // 统一的任务添加方法
-    public addTask(id: string, name: string, time: string, instruction: ExecutionStep[], enabled: boolean = true): void {
+    public addTask(id: string, name: string, time: string, instruction: TaskInstruction[], enabled: boolean = true): void {
         const task: ScheduledTask = {
             id,
             name,

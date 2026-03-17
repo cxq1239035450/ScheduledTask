@@ -3,131 +3,71 @@
 export interface BaseInstruction {
   id: string;
   type: string;
-  description?: string;
   delay?: number; // 延迟执行时间（毫秒）
   retryCount?: number; // 重试次数
   timeout?: number; // 超时时间（毫秒）
+  parameters?: Record<string, any>; // 指令参数，根据具体指令类型定义
 }
-
+// 唤醒指令
+export interface WakeUpInstruction extends BaseInstruction {
+  type: 'wake_up';
+}
 // 应用启动指令
 export interface LaunchAppInstruction extends BaseInstruction {
   type: 'launch_app';
-  packageName: string;
-  userId?: number;
-  waitForLaunch?: number; // 等待应用启动时间
+  parameters: {
+    packageName: string; // 应用包名
+    userId?: number; // 用户ID，可选，用于多用户环境
+  };
 }
-
+// 关闭应用指令
+export interface CloseAppInstruction extends BaseInstruction {
+  type: 'close_app';
+  parameters: {
+    packageName: string; // 应用包名
+    userId?: number; // 用户ID，可选，用于多用户环境
+  };
+}
 // 点击指令
 export interface ClickInstruction extends BaseInstruction {
   type: 'click';
-  target: {
-    type: 'coordinate' | 'text' | 'id' | 'description';
-    value: string | { x: number; y: number };
-    text?: string; // 可选的文本描述
+  parameters: {
+    x: number; // 点击坐标X
+    y: number; // 点击坐标Y
+    longPress?: boolean; // 是否长按
+    duration?: number; // 长按持续时间（毫秒）
   };
-  longPress?: boolean;
-  duration?: number; // 长按持续时间
 }
 
 // 滑动指令
 export interface SwipeInstruction extends BaseInstruction {
   type: 'swipe';
-  direction: 'up' | 'down' | 'left' | 'right' | 'custom';
-  startPoint?: { x: number; y: number };
-  endPoint?: { x: number; y: number };
-  duration?: number;
-  distance?: number; // 滑动距离（像素）
-}
-
-// 输入文本指令
-export interface InputTextInstruction extends BaseInstruction {
-  type: 'input_text';
-  text: string;
-  target?: {
-    type: 'id' | 'text' | 'description';
-    value: string;
+  parameters: {
+    direction: 'up' | 'down' | 'left' | 'right';
+    startX?: number;
+    startY?: number;
+    endX?: number;
+    endY?: number;
+    duration?: number; // 滑动持续时间（毫秒）
   };
-  clearFirst?: boolean;
 }
 
 // 等待指令
 export interface WaitInstruction extends BaseInstruction {
   type: 'wait';
-  duration: number;
-  waitForElement?: {
-    type: 'text' | 'id' | 'description';
-    value: string;
-    timeout?: number;
+  parameters: {
+    duration: number; // 等待持续时间（毫秒）
   };
-}
-
-// 截图指令
-export interface ScreenshotInstruction extends BaseInstruction {
-  type: 'screenshot';
-  filename?: string;
-  saveToGallery?: boolean;
-}
-
-// Toast 提示指令
-export interface ToastInstruction extends BaseInstruction {
-  type: 'toast';
-  message: string;
-  duration?: 'short' | 'long';
-}
-
-// 日志指令
-export interface LogInstruction extends BaseInstruction {
-  type: 'log';
-  level: 'info' | 'success' | 'warning' | 'error';
-  message: string;
-  category?: string;
-}
-
-// 条件判断指令
-export interface ConditionalInstruction extends BaseInstruction {
-  type: 'if';
-  condition: {
-    type: 'element_exists' | 'text_contains' | 'app_running' | 'time_range';
-    target?: {
-      type: 'text' | 'id' | 'description';
-      value: string;
-    };
-    value?: string;
-    startTime?: string;
-    endTime?: string;
-  };
-  thenInstructions: TaskInstruction[];
-  elseInstructions?: TaskInstruction[];
-}
-
-// 循环指令
-export interface LoopInstruction extends BaseInstruction {
-  type: 'loop';
-  loopType: 'count' | 'while' | 'until';
-  count?: number;
-  condition?: {
-    type: 'element_exists' | 'text_contains';
-    target?: {
-      type: 'text' | 'id' | 'description';
-      value: string;
-    };
-    value?: string;
-  };
-  instructions: TaskInstruction[];
 }
 
 // 任务指令联合类型
-export type TaskInstruction = 
+export type TaskInstruction =
+  | CloseAppInstruction
+  | WakeUpInstruction
   | LaunchAppInstruction
   | ClickInstruction
   | SwipeInstruction
-  | InputTextInstruction
-  | WaitInstruction
-  | ScreenshotInstruction
-  | ToastInstruction
-  | LogInstruction
-  | ConditionalInstruction
-  | LoopInstruction;
+  | WaitInstruction;
 
 // 任务定义
 export interface Task {
@@ -139,10 +79,10 @@ export interface Task {
   type: 'daily' | 'weekly' | 'monthly' | 'once';
   instruction: TaskInstruction[]; // 任务指令列表
   enabled: boolean;
-  lastExecuted?: Date;
-  nextExecution?: Date;
-  retryCount?: number;
-  maxRetries?: number;
+  lastExecuted?: Date; // 上次执行时间
+  nextExecution?: Date; // 下次执行时间
+  retryCount?: number; // 重试次数
+  maxRetries?: number; // 最大重试次数
 }
 
 // 指令执行结果
@@ -191,8 +131,8 @@ export const COMMON_INSTRUCTION_TEMPLATES: InstructionTemplate[] = [
       id: 'launch_wechat',
       type: 'launch_app',
       packageName: 'com.tencent.mm',
-      waitForLaunch: 3000
-    }
+      waitForLaunch: 3000,
+    },
   },
   {
     id: 'click_work_attendance',
@@ -204,10 +144,10 @@ export const COMMON_INSTRUCTION_TEMPLATES: InstructionTemplate[] = [
       type: 'click',
       target: {
         type: 'text',
-        value: '打卡'
+        value: '打卡',
       },
-      description: '点击打卡按钮'
-    }
+      description: '点击打卡按钮',
+    },
   },
   {
     id: 'swipe_up_unlock',
@@ -219,8 +159,8 @@ export const COMMON_INSTRUCTION_TEMPLATES: InstructionTemplate[] = [
       type: 'swipe',
       direction: 'up',
       distance: 200,
-      duration: 500
-    }
+      duration: 500,
+    },
   },
   {
     id: 'wait_for_app',
@@ -230,8 +170,8 @@ export const COMMON_INSTRUCTION_TEMPLATES: InstructionTemplate[] = [
     instruction: {
       id: 'wait_for_app',
       type: 'wait',
-      duration: 2000
-    }
+      duration: 2000,
+    },
   },
   {
     id: 'screenshot_result',
@@ -241,9 +181,9 @@ export const COMMON_INSTRUCTION_TEMPLATES: InstructionTemplate[] = [
     instruction: {
       id: 'screenshot_result',
       type: 'screenshot',
-      saveToGallery: true
-    }
-  }
+      saveToGallery: true,
+    },
+  },
 ];
 
 // 指令验证规则
@@ -256,34 +196,44 @@ export interface ValidationRule {
   enum?: string[];
 }
 
-export const INSTRUCTION_VALIDATION_RULES: { [key: string]: { [field: string]: ValidationRule } } = {
+export const INSTRUCTION_VALIDATION_RULES: {
+  [key: string]: { [field: string]: ValidationRule };
+} = {
   launch_app: {
     packageName: { required: true, type: 'string' },
-    waitForLaunch: { required: false, type: 'number', min: 0 }
+    waitForLaunch: { required: false, type: 'number', min: 0 },
   },
   click: {
     target: { required: true, type: 'object' },
     longPress: { required: false, type: 'boolean' },
-    duration: { required: false, type: 'number', min: 0 }
+    duration: { required: false, type: 'number', min: 0 },
   },
   swipe: {
-    direction: { required: true, type: 'string', enum: ['up', 'down', 'left', 'right', 'custom'] },
+    direction: {
+      required: true,
+      type: 'string',
+      enum: ['up', 'down', 'left', 'right', 'custom'],
+    },
     duration: { required: false, type: 'number', min: 0 },
-    distance: { required: false, type: 'number', min: 0 }
+    distance: { required: false, type: 'number', min: 0 },
   },
   input_text: {
     text: { required: true, type: 'string' },
-    clearFirst: { required: false, type: 'boolean' }
+    clearFirst: { required: false, type: 'boolean' },
   },
   wait: {
-    duration: { required: false, type: 'number', min: 0 }
+    duration: { required: false, type: 'number', min: 0 },
   },
   toast: {
     message: { required: true, type: 'string' },
-    duration: { required: false, type: 'string', enum: ['short', 'long'] }
+    duration: { required: false, type: 'string', enum: ['short', 'long'] },
   },
   log: {
-    level: { required: true, type: 'string', enum: ['info', 'success', 'warning', 'error'] },
-    message: { required: true, type: 'string' }
-  }
+    level: {
+      required: true,
+      type: 'string',
+      enum: ['info', 'success', 'warning', 'error'],
+    },
+    message: { required: true, type: 'string' },
+  },
 };
