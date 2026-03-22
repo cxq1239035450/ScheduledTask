@@ -123,65 +123,84 @@ export interface InstructionTemplate {
 // 常用指令模板
 export const COMMON_INSTRUCTION_TEMPLATES: InstructionTemplate[] = [
   {
-    id: 'launch_wechat',
-    name: '启动微信',
-    description: '启动微信应用',
-    category: '应用启动',
+    id: 'wake_up',
+    name: '唤醒屏幕',
+    description: '点亮并唤醒设备屏幕',
+    category: '系统操作',
     instruction: {
-      id: 'launch_wechat',
+      id: 'wake_up_1',
+      type: 'wake_up',
+    },
+  },
+  {
+    id: 'launch_dingtalk',
+    name: '启动钉钉',
+    description: '启动钉钉应用',
+    category: '应用操作',
+    instruction: {
+      id: 'launch_dingtalk_1',
       type: 'launch_app',
-      packageName: 'com.tencent.mm',
-      waitForLaunch: 3000,
-    },
-  },
-  {
-    id: 'click_work_attendance',
-    name: '点击工作打卡',
-    description: '点击工作打卡按钮',
-    category: '点击操作',
-    instruction: {
-      id: 'click_work_attendance',
-      type: 'click',
-      target: {
-        type: 'text',
-        value: '打卡',
+      parameters: {
+        packageName: 'com.alibaba.android.rimet',
+        userId: 0
       },
-      description: '点击打卡按钮',
     },
   },
   {
-    id: 'swipe_up_unlock',
-    name: '上滑解锁',
-    description: '向上滑动解锁屏幕',
-    category: '滑动操作',
+    id: 'close_dingtalk',
+    name: '关闭钉钉',
+    description: '停止钉钉应用运行',
+    category: '应用操作',
     instruction: {
-      id: 'swipe_up_unlock',
+      id: 'close_dingtalk_1',
+      type: 'close_app',
+      parameters: {
+        packageName: 'com.alibaba.android.rimet',
+        userId: 0
+      },
+    },
+  },
+  {
+    id: 'click_center',
+    name: '点击屏幕中心',
+    description: '在屏幕中心位置执行点击',
+    category: '触摸操作',
+    instruction: {
+      id: 'click_center_1',
+      type: 'click',
+      parameters: {
+        x: 540,
+        y: 1100,
+        longPress: false,
+        duration: 100
+      },
+    },
+  },
+  {
+    id: 'swipe_up',
+    name: '向上滑动',
+    description: '从下往上滑动屏幕',
+    category: '触摸操作',
+    instruction: {
+      id: 'swipe_up_1',
       type: 'swipe',
-      direction: 'up',
-      distance: 200,
-      duration: 500,
+      parameters: {
+        direction: 'up',
+        duration: 300
+      },
     },
   },
   {
-    id: 'wait_for_app',
-    name: '等待应用加载',
-    description: '等待应用完全加载',
-    category: '等待操作',
+    id: 'wait_2s',
+    name: '等待2秒',
+    description: '暂停执行2000毫秒',
+    category: '流程控制',
     instruction: {
-      id: 'wait_for_app',
+      id: 'wait_1',
       type: 'wait',
-      duration: 2000,
-    },
-  },
-  {
-    id: 'screenshot_result',
-    name: '截图保存结果',
-    description: '截图并保存到相册',
-    category: '截图操作',
-    instruction: {
-      id: 'screenshot_result',
-      type: 'screenshot',
-      saveToGallery: true,
+      parameters: {
+        duration: 2000,
+      },
     },
   },
 ];

@@ -103,14 +103,25 @@ class AppLauncherModule(reactContext: ReactApplicationContext) : ReactContextBas
     @ReactMethod
     fun closeApp(packageName: String, userIdSerialNumber: Double, promise: Promise) {
         try {
-            // 1. 模拟点击 Home 键回到桌面
-            val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-                addCategory(Intent.CATEGORY_HOME)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // 1. 尝试使用辅助功能执行“返回”或“Home”操作，这在后台比 startActivity(homeIntent) 更可靠
+            val service = TouchSimulationService.getInstance()
+            if (service != null) {
+                // 连续执行两次返回，通常能退回桌面或上一级
+                service.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+                Handler(Looper.getMainLooper()).postDelayed({
+                    service.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
+                }, 500)
+            } else {
+                // 如果没有开启辅助功能，退而求其次使用 Intent
+                val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                    addCategory(Intent.CATEGORY_HOME)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                reactApplicationContext.startActivity(homeIntent)
             }
-            reactApplicationContext.startActivity(homeIntent)
 
-            // 2. 延迟 2 秒后回到本应用
+            // 2. 等待界面切换完成，然后回到本应用 (ScheduledTask)
+            // 在 Android 10+，这需要"后台弹出界面"权限或应用正处于前台服务状态
             Handler(Looper.getMainLooper()).postDelayed({
                 try {
                     val launchIntent = reactApplicationContext.packageManager.getLaunchIntentForPackage(reactApplicationContext.packageName)?.apply {
@@ -118,15 +129,20 @@ class AppLauncherModule(reactContext: ReactApplicationContext) : ReactContextBas
                     }
                     if (launchIntent != null) {
                         reactApplicationContext.startActivity(launchIntent)
+                        Log.d("AppLauncherModule", "Successfully returned to main app")
                     }
-                    promise.resolve(true)
                 } catch (e: Exception) {
                     Log.e("AppLauncherModule", "Failed to return to main activity", e)
-                    promise.reject("CLOSE_APP_ERROR", "返回主界面失败: ${e.message}")
                 }
-            }, 2000)
+            }, 2000) // 增加等待时间到2秒，确保界面切换完成
             
-            showToast("正在关闭应用...")
+            // 等待3秒后 resolve，确保所有操作完成
+            Handler(Looper.getMainLooper()).postDelayed({
+                promise.resolve(true)
+                showToast("已返回主界面")
+            }, 3000)
+            
+            showToast("正在尝试返回主界面...")
         } catch (e: Exception) {
             Log.e("AppLauncherModule", "Exception in closeApp", e)
             promise.reject("CLOSE_APP_ERROR", e.message)

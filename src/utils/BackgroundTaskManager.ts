@@ -129,15 +129,24 @@ class BackgroundTaskManager {
                 break;
 
             case 'launch_app':
-                console.log(`BackgroundTaskManager: 执行 launch_app`, parameters);
-                const success = await AppLauncherModule.launchApp(
-                    parameters?.packageName,
-                    parameters?.userId ?? 0
-                );
-                if (success) {
-                    await LogManager.addLog(`应用启动成功: ${parameters?.packageName}`, 'success', taskName);
-                } else {
-                    throw new Error(`应用启动失败: ${parameters?.packageName}`);
+                console.log(`BackgroundTaskManager: 执行 launch_app: ${parameters?.packageName}`);
+                try {
+                    const success = await AppLauncherModule.launchApp(
+                        parameters?.packageName,
+                        parameters?.userId ?? 0
+                    );
+                    console.log(`BackgroundTaskManager: launch_app native call returned: ${success}`);
+                    if (success) {
+                        await LogManager.addLog(`应用启动成功: ${parameters?.packageName}`, 'success', taskName);
+                        // 启动应用后，我们手动等待一段时间，给系统切换应用的时间
+                        console.log(`BackgroundTaskManager: launch_app 后等待 5 秒...`);
+                        await new Promise(resolve => setTimeout(resolve, 5000));
+                    } else {
+                        throw new Error(`应用启动失败: ${parameters?.packageName}`);
+                    }
+                } catch (err: any) {
+                    console.error(`BackgroundTaskManager: launch_app error: ${err.message}`);
+                    throw err;
                 }
                 break;
 
@@ -173,7 +182,7 @@ class BackgroundTaskManager {
 
         const now = new Date();
         try {
-            console.log(`BackgroundTaskManager: 正在执行定时任务 ${task.name} (${task.time})`);
+            console.log(`BackgroundTaskManager: 正在执行定时任务 ${task.name} (${task.time}) ${task.instruction}`);
             await LogManager.addLog(`执行定时任务: ${task.name}`, 'info', task.name);
 
             await BackgroundTaskModule.updateNotification({
@@ -183,13 +192,29 @@ class BackgroundTaskManager {
             // 执行定时任务
             for (let i = 0; i < task.instruction.length; i++) {
                 const step = task.instruction[i];
-                console.log(`BackgroundTaskManager: 执行步骤 ${i + 1}/${task.instruction.length}`);
+                console.log(`BackgroundTaskManager: 执行步骤 ${i + 1}/${task.instruction.length}: ${step.type}`);
+                console.log(`BackgroundTaskManager: 步骤详情:`, JSON.stringify(step, null, 2));
+                
                 await BackgroundTaskModule.updateNotification({
                     taskDesc: `正在执行: ${task.name} (${i + 1}/${task.instruction.length})`
                 });
-                await this.executeStep(step, task.name);
-                await new Promise(resolve => setTimeout(resolve, step.delay ?? 1000));
+                
+                try {
+                    await this.executeStep(step, task.name);
+                    console.log(`BackgroundTaskManager: 步骤 ${i + 1} 执行完成`);
+                } catch (error: any) {
+                    console.error(`BackgroundTaskManager: 步骤 ${i + 1} 执行失败:`, error);
+                    await LogManager.addLog(`步骤 ${i + 1} 执行失败: ${error.message}`, 'error', task.name);
+                    throw error;
+                }
+                
+                // 只有在不是最后一步时才增加额外的步间延迟
+                if (i < task.instruction.length - 1) {
+                    console.log(`BackgroundTaskManager: 等待 2 秒后执行下一步...`);
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
             }
+            console.log(`BackgroundTaskManager: 所有步骤执行完成`);
             await LogManager.addLog(`任务执行成功: ${task.name}`, 'success', task.name);
 
             task.lastExecuted = now;

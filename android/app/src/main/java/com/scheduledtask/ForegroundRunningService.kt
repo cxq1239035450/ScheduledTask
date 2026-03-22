@@ -91,6 +91,11 @@ class ForegroundRunningService : Service() {
         if (matchedTasks.isNotEmpty()) {
             Log.d("ForegroundService", "Native tasks triggered: ${matchedTasks.size} tasks at $currentTime")
             
+            // 获取一个短时间的 WakeLock，确保任务分发不会被挂起
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            val dispatchLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ScheduledTask::TaskDispatchLock")
+            dispatchLock.acquire(5000L)
+            
             for (taskId in matchedTasks) {
                 // 如果是唤醒任务，先执行原生唤醒
                 if (taskId == "wakeup") {
@@ -102,8 +107,12 @@ class ForegroundRunningService : Service() {
                 val serviceIntent = Intent(this, TaskHeadlessJsService::class.java).apply {
                     putExtra("taskId", taskId)
                 }
+                
                 startService(serviceIntent)
                 Log.d("ForegroundService", "Started Headless JS for task: $taskId")
+                
+                // 等待一小段时间确保任务开始执行
+                Thread.sleep(1000)
             }
         }
     }

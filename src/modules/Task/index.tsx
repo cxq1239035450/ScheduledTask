@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, NativeModules, Alert, PermissionsAndroid, Platform } from 'react-native';
-import { Icon, FAB, Card, Switch, Button } from 'react-native-paper';
+import { Icon, FAB, Card, Switch, Button, IconButton } from 'react-native-paper';
 import BackgroundTaskManager from '../../utils/BackgroundTaskManager';
 import LogManager from '../../utils/LogManager';
 import AppManager from '../../utils/AppManager';
 import { Task, TaskInstruction } from '../../types/TaskInstruction';
 import { InstructionEditor } from './components/InstructionEditor';
 import { AppPicker } from './components/AppPicker';
+import { CreateTaskModal } from './components/CreateTaskModal';
 
 const { WakeScreenModule, TouchSimulationModule,AppLauncherModule } = NativeModules;
 interface AppInfo {
@@ -21,15 +22,23 @@ const EXAMPLE_TASKS: Task[] = [
     id: '1',
     title: '钉钉自动打卡',
     description: '早上8:32自动打卡',
-    time: '22:57',
+    time: '00:09',
     status: 'running',
     type: 'daily',
     enabled: true,
     instruction: [
       {
-        id: 'swipe_up_1',
+        id: 'wake_up_1',
         type: 'wake_up',
-        // delay: 1000
+      },
+      {
+        id: 'swipe_up_1',
+        type: 'swipe',
+        parameters: {
+          direction: 'up',
+          duration: 300
+        },
+        delay: 1000
       },
       {
         id: 'launch_dingtalk_1',
@@ -38,6 +47,7 @@ const EXAMPLE_TASKS: Task[] = [
           packageName: 'com.alibaba.android.rimet',
           userId: 0
         },
+        delay: 2000
       },
       {
         id: 'close_dingtalk_1',
@@ -45,7 +55,8 @@ const EXAMPLE_TASKS: Task[] = [
         parameters:{
           packageName: 'com.alibaba.android.rimet',
           userId: 0
-        }
+        },
+        delay: 2000
       }
     ],
   },
@@ -53,7 +64,7 @@ const EXAMPLE_TASKS: Task[] = [
     id: '2',
     title: '钉钉自动打卡',
     description: '下午18:33自动打卡',
-    time: '22:45',
+    time: '18:33',
     status: 'running',
     type: 'daily',
     instruction: [
@@ -112,53 +123,66 @@ function TaskHeader() {
 //   stopped: { label: '未运行', color: '#999' },
 // };
 
-function TaskItem({ item, onToggle, onEdit, onExecute }: { 
+function TaskItem({ item, onToggle, onEdit, onExecute, onDelete }: { 
   item: Task, 
   onToggle: (id: string) => void,
   onEdit: (task: Task) => void,
-  onExecute: (task: Task) => void 
+  onExecute: (task: Task) => void,
+  onDelete: (id: string) => void
 }) {
-  // const config = STATUS_CONFIG[item.status as keyof typeof STATUS_CONFIG];
-  
-  // Switch 开启状态：运行中或异常
   const isSwitchOn = item.status !== 'stopped';
 
   return (
     <Card style={styles.taskCard}>
       <Card.Content style={styles.cardContent}>
-        <View style={styles.taskInfo}>
-          <Text style={styles.taskTitle}>{item.title}</Text>
+        <View style={styles.taskMainInfo}>
+          <View style={styles.titleRow}>
+            <Text style={styles.taskTitle} numberOfLines={1}>{item.title}</Text>
+            <Switch
+              value={isSwitchOn}
+              onValueChange={() => onToggle(item.id)}
+              color="#4F46E5"
+              style={styles.taskSwitch}
+            />
+          </View>
+          
           {item.description && (
-            <Text style={styles.taskDescription}>{item.description}</Text>
+            <Text style={styles.taskDescription} numberOfLines={1}>{item.description}</Text>
           )}
-          <View style={styles.timeRow}>
-            <Icon source="clock-outline" size={14} color="#666" />
-            <Text style={styles.taskTime}>{item.time}</Text>
-            <Text style={styles.instructionCount}>
-              {item.instruction.length} 个指令
-            </Text>
+          
+          <View style={styles.taskFooter}>
+            <View style={styles.timeInfo}>
+              <Icon source="clock-outline" size={14} color="#666" />
+              <Text style={styles.taskTime}>{item.time}</Text>
+              <View style={styles.dot} />
+              <Text style={styles.instructionCount}>
+                {item.instruction.length} 个指令
+              </Text>
+            </View>
+            
+            <View style={styles.actionButtons}>
+              <IconButton 
+                icon="pencil-outline" 
+                size={18} 
+                onPress={() => onEdit(item)}
+                style={styles.iconBtn}
+              />
+              <IconButton 
+                icon="delete-outline" 
+                size={18} 
+                iconColor="#FF5252"
+                onPress={() => onDelete(item.id)}
+                style={styles.iconBtn}
+              />
+              <IconButton 
+                icon="play" 
+                size={18} 
+                iconColor="#4CAF50"
+                onPress={() => onExecute(item)}
+                style={styles.iconBtn}
+              />
+            </View>
           </View>
-        </View>
-        <View style={styles.statusAction}>
-          <View style={styles.actionButtons}>
-            <TouchableOpacity 
-              style={styles.actionButton} 
-              onPress={() => onEdit(item)}
-            >
-              <Icon source="pencil" size={16} color="#666" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.actionButton} 
-              onPress={() => onExecute(item)}
-            >
-              <Icon source="play" size={16} color="#4CAF50" />
-            </TouchableOpacity>
-          </View>
-          <Switch
-            value={isSwitchOn}
-            onValueChange={() => onToggle(item.id)}
-            color="#4F46E5"
-          />
         </View>
       </Card.Content>
     </Card>
@@ -170,6 +194,7 @@ export default function TaskScreen() {
   const [isAppPickerVisible, setAppPickerVisible] = useState(false);
   const [installedApps, setInstalledApps] = useState<AppInfo[]>([]);
   const [isInstructionEditorVisible, setInstructionEditorVisible] = useState(false);
+  const [isCreateTaskModalVisible, setCreateTaskModalVisible] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   useEffect(() => {
@@ -215,8 +240,51 @@ export default function TaskScreen() {
     setInstructionEditorVisible(true);
   };
 
+  const handleDeleteTask = (id: string) => {
+    Alert.alert(
+      '确认删除',
+      '确定要删除这个任务吗？',
+      [
+        { text: '取消', style: 'cancel' },
+        { 
+          text: '删除', 
+          style: 'destructive',
+          onPress: () => {
+            setTasks(prev => prev.filter(task => task.id !== id));
+            BackgroundTaskManager.removeTask(id);
+          }
+        },
+      ]
+    );
+  };
+
+  const handleSaveNewTask = (taskData: Omit<Task, 'id'>) => {
+    const newTask: Task = {
+      ...taskData,
+      id: Date.now().toString(), // 简单生成 ID
+    };
+
+    setTasks(prev => [...prev, newTask]);
+    
+    // 同步到 BackgroundTaskManager
+    BackgroundTaskManager.addTask(
+      newTask.id,
+      newTask.title,
+      newTask.time,
+      newTask.instruction
+    );
+    
+    Alert.alert('创建成功', `任务 "${newTask.title}" 已创建`);
+  };
+
   const handleExecuteTask = async (task: Task) => {
-    console.log(task);
+    try {
+      await requestForegroundPermission();
+      BackgroundTaskManager.executeTaskById(task.id);
+      Alert.alert('执行成功', `任务 "${task.title}" 已执行`);
+    } catch (error: any) {
+      Alert.alert('执行失败', `执行任务 "${task.title}" 失败: ${error.message}`);
+    }
   };
 
   const handleSaveInstructions = (instructions: TaskInstruction[]) => {
@@ -369,15 +437,6 @@ const requestForegroundPermission = async () => {
         >
           模拟上滑失败？去开启“辅助功能”服务
         </Button>
-        {/* <Button 
-          mode="text" 
-          onPress={openAppPicker}
-          icon="application-export"
-          style={{ marginTop: -4 }}
-          labelStyle={{ fontSize: 12, color: '#4CAF50' }}
-        >
-          从应用列表选择并打开
-        </Button> */}
 
         <Button 
           mode="text" 
@@ -412,6 +471,7 @@ const requestForegroundPermission = async () => {
             onToggle={handleToggle}
             onEdit={handleEditTask}
             onExecute={handleExecuteTask}
+            onDelete={handleDeleteTask}
           />
         )}
         keyExtractor={item => item.id}
@@ -422,7 +482,14 @@ const requestForegroundPermission = async () => {
       <FAB
         icon="plus"
         style={styles.fab}
-        onPress={() => console.log('Add Task')}
+        onPress={() => setCreateTaskModalVisible(true)}
+      />
+
+      {/* 创建任务弹窗 */}
+      <CreateTaskModal
+        visible={isCreateTaskModalVisible}
+        onClose={() => setCreateTaskModalVisible(false)}
+        onSave={handleSaveNewTask}
       />
 
       {/* 指令编辑器 */}
@@ -508,64 +575,91 @@ const styles = StyleSheet.create({
   taskCard: {
     marginBottom: 12,
     backgroundColor: '#fff',
-    elevation: 2,
     borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   cardContent: {
+    padding: 12,
+  },
+  taskMainInfo: {
+    flex: 1,
+  },
+  titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  taskInfo: {
-    flex: 1,
+    marginBottom: 4,
   },
   taskTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 6,
+    fontWeight: 'bold',
+    color: '#1A1A1A',
+    flex: 1,
+    marginRight: 8,
+  },
+  taskSwitch: {
+    transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }],
   },
   taskDescription: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 12,
   },
-  timeRow: {
+  taskFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  timeInfo: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   taskTime: {
     fontSize: 13,
-    color: '#666',
+    color: '#4F46E5',
+    fontWeight: '600',
     marginLeft: 4,
+  },
+  dot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#CCC',
+    marginHorizontal: 8,
   },
   instructionCount: {
     fontSize: 12,
-    color: '#4F46E5',
-    backgroundColor: '#EEF2FF',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginLeft: 8,
-  },
-  statusAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 12,
+    color: '#999',
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
+    gap: 4,
   },
-  actionButton: {
-    padding: 8,
-    borderRadius: 6,
-    backgroundColor: '#F3F4F6',
+  iconBtn: {
+    margin: 0,
+    width: 32,
+    height: 32,
   },
-  statusLabelText: {
+  playButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginLeft: 8,
+  },
+  playButtonText: {
+    color: 'white',
     fontSize: 12,
-    marginRight: 8,
-    fontWeight: '500',
+    fontWeight: 'bold',
+    marginLeft: 4,
   },
   fab: {
     position: 'absolute',
