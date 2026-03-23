@@ -38,14 +38,23 @@ class ForegroundRunningService : Service() {
         try {
             Log.d("ForegroundService", "Attempting to wake up screen only")
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            
+            // 使用 SCREEN_BRIGHT_WAKE_LOCK 代替已废弃的 FULL_WAKE_LOCK
+            // ACQUIRE_CAUSES_WAKEUP 才是真正唤醒屏幕的关键
             @Suppress("DEPRECATION")
             val wakeLock = powerManager.newWakeLock(
-                PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
                 "ScheduledTask::WakeOnlyLockTag"
             )
-            if (wakeLock.isHeld) wakeLock.release()
+            
+            // 确保之前的锁已释放（虽然这里是局部变量，但保持良好习惯）
+            if (wakeLock.isHeld) {
+                wakeLock.release()
+            }
+            
             wakeLock.acquire(10000L)
-            Log.d("ForegroundService", "Screen woke up")
+            
+            Log.d("ForegroundService", "Screen wake up request sent")
         } catch (e: Exception) {
             Log.e("ForegroundService", "Wake screen failed", e)
         }
@@ -91,24 +100,41 @@ class ForegroundRunningService : Service() {
         if (matchedTasks.isNotEmpty()) {
             Log.d("ForegroundService", "Native tasks triggered: ${matchedTasks.size} tasks at $currentTime")
             
-            // 获取一个短时间的 WakeLock，确保任务分发不会被挂起
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            
+            // 检查是否有唤醒任务
+            val hasWakeupTask = matchedTasks.contains("wakeup")
+            
+            if (hasWakeupTask) {
+                // 如果有唤醒任务，先执行唤醒。
+                // 注意：在获取 PARTIAL_WAKE_LOCK 之前执行唤醒，
+                // 避免某些系统因为 CPU 已经处于 Partial 唤醒状态而忽略了 ACQUIRE_CAUSES_WAKEUP 的屏幕唤醒指令。
+                wakeUpScreenOnly()
+            }
+
+            // 获取一个短时间的 PARTIAL_WAKE_LOCK，确保任务分发不会被挂起（主要针对非唤醒任务，或者唤醒后的持续运行）
             val dispatchLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ScheduledTask::TaskDispatchLock")
             dispatchLock.acquire(5000L)
             
             for (taskId in matchedTasks) {
-                // 如果是唤醒任务，先执行原生唤醒
+                // 如果是唤醒任务，且上面已经执行过 wakeUpScreenOnly，这里可以跳过或记录日志
                 if (taskId == "wakeup") {
-                    wakeUpScreenOnly()
-                    Log.d("ForegroundService", "Executed native wakeup logic")
+                    if (!hasWakeupTask) { // 理论上不会进入这里，因为上面已经判断过了
+                        wakeUpScreenOnly()
+                    }
+                    Log.d("ForegroundService", "Executed native wakeup logic for taskId: $taskId")
                 }
 
-                // 所有任务都通过 Headless JS 执行，确保 JS 逻辑（如日志、后续指令）能运行且不拉起页面
+                // 所有任务都通过 Headless JS 执行，确保 JS 逻辑能运行
                 val serviceIntent = Intent(this, TaskHeadlessJsService::class.java).apply {
                     putExtra("taskId", taskId)
                 }
                 
-                startService(serviceIntent)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(serviceIntent)
+                } else {
+                    startService(serviceIntent)
+                }
                 Log.d("ForegroundService", "Started Headless JS for task: $taskId")
                 
                 // 等待一小段时间确保任务开始执行
