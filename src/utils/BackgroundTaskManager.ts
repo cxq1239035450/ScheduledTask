@@ -1,18 +1,13 @@
 import { NativeModules, DeviceEventEmitter } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import LogManager from './LogManager';
-import { TaskInstruction } from '../types/TaskInstruction';
+import { Task, TaskInstruction } from '../types/TaskInstruction';
 
 const { BackgroundTaskModule, WakeScreenModule, TouchSimulationModule, AppLauncherModule } = NativeModules;
 
+const STORAGE_KEY = 'scheduled_tasks';
 
-interface ScheduledTask {
-    id: string;
-    name: string;
-    time: string;
-    instruction: TaskInstruction[];
-    lastExecuted?: Date;
-    enabled: boolean;
-}
+export type ScheduledTask = Task;
 
 const defaultOptions = {
     taskTitle: '定时任务正在运行',
@@ -26,6 +21,9 @@ class BackgroundTaskManager {
     private tickSubscription: any = null;
 
     private constructor() {
+        // 初始化时加载本地任务
+        this.loadTasks();
+
         // 注册原生事件监听：每分钟心跳，用于更新通知状态
         this.tickSubscription = DeviceEventEmitter.addListener('onTick', () => {
             this.updateNotificationStatus();
@@ -36,6 +34,37 @@ class BackgroundTaskManager {
             console.log(`BackgroundTaskManager: Native triggered execution for task: ${taskId}`);
             this.executeTaskById(taskId);
         });
+    }
+
+    private async loadTasks() {
+        try {
+            const savedTasks = await AsyncStorage.getItem(STORAGE_KEY);
+            if (savedTasks) {
+                const parsedTasks: ScheduledTask[] = JSON.parse(savedTasks);
+                this.tasks.clear();
+                parsedTasks.forEach(task => {
+                    // 恢复日期对象
+                    if (task.lastExecuted) {
+                        task.lastExecuted = new Date(task.lastExecuted);
+                    }
+                    this.tasks.set(task.id, task);
+                });
+                console.log(`BackgroundTaskManager: 已从本地加载 ${parsedTasks.length} 个任务`);
+                this.syncToNative();
+            }
+        } catch (e) {
+            console.error('Failed to load tasks from storage', e);
+        }
+    }
+
+    private async saveTasks() {
+        try {
+            const allTasks = Array.from(this.tasks.values());
+            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allTasks));
+            console.log('BackgroundTaskManager: 任务已保存到本地', allTasks);
+        } catch (e) {
+            console.error('Failed to save tasks to storage', e);
+        }
     }
 
     public async syncToNative() {
@@ -178,6 +207,7 @@ class BackgroundTaskManager {
 
     public async executeTaskById(taskId: string) {
         const task = this.tasks.get(taskId);
+        console.log(`BackgroundTaskManager: 执行任务 ${taskId}`,this.tasks, task);
         if (!task || !task.enabled) return;
 
         const now = new Date();
@@ -311,18 +341,11 @@ class BackgroundTaskManager {
     }
 
     // 统一的任务添加方法
-    public addTask(id: string, name: string, time: string, instruction: TaskInstruction[], enabled: boolean = true): void {
-        const task: ScheduledTask = {
-            id,
-            name,
-            time,
-            instruction,
-            enabled,
-            lastExecuted: undefined
-        };
-        this.tasks.set(id, task);
-        console.log(`BackgroundTaskManager: 已添加定时任务 ${name} (${time})`);
+    public addTask(task: ScheduledTask): void {
+        this.tasks.set(task.id, task);
+        console.log(`BackgroundTaskManager: 已添加定时任务 ${task.name} (${task.time})`);
         this.syncToNative();
+        this.saveTasks(); // 持久化
     }
 
     public removeTask(id: string): boolean {
@@ -330,6 +353,7 @@ class BackgroundTaskManager {
         if (removed) {
             console.log(`BackgroundTaskManager: 已移除任务 ${id}`);
             this.syncToNative();
+            this.saveTasks(); // 持久化
         }
         return removed;
     }
@@ -338,8 +362,10 @@ class BackgroundTaskManager {
         const task = this.tasks.get(id);
         if (task) {
             task.enabled = true;
+            task.status = 'running';
             console.log(`BackgroundTaskManager: 已启用任务 ${task.name}`);
             this.syncToNative();
+            this.saveTasks(); // 持久化
             return true;
         }
         return false;
@@ -349,8 +375,10 @@ class BackgroundTaskManager {
         const task = this.tasks.get(id);
         if (task) {
             task.enabled = false;
+            task.status = 'stopped';
             console.log(`BackgroundTaskManager: 已禁用任务 ${task.name}`);
             this.syncToNative();
+            this.saveTasks(); // 持久化
             return true;
         }
         return false;
@@ -368,6 +396,7 @@ class BackgroundTaskManager {
         this.tasks.clear();
         console.log('BackgroundTaskManager: 已清空所有任务');
         this.syncToNative();
+        this.saveTasks(); // 持久化清空后的状态
     }
 
     

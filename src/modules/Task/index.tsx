@@ -1,6 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, NativeModules, Alert, PermissionsAndroid, Platform } from 'react-native';
-import { Icon, FAB, Card, Switch, Button, IconButton } from 'react-native-paper';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  NativeModules,
+  Alert,
+  PermissionsAndroid,
+  Platform,
+} from 'react-native';
+import {
+  Icon,
+  FAB,
+  Card,
+  Switch,
+  Button,
+  IconButton,
+} from 'react-native-paper';
 import BackgroundTaskManager from '../../utils/BackgroundTaskManager';
 import LogManager from '../../utils/LogManager';
 import AppManager from '../../utils/AppManager';
@@ -9,7 +26,8 @@ import { InstructionEditor } from './components/InstructionEditor';
 import { AppPicker } from './components/AppPicker';
 import { CreateTaskModal } from './components/CreateTaskModal';
 
-const { WakeScreenModule, TouchSimulationModule,AppLauncherModule } = NativeModules;
+const { WakeScreenModule, TouchSimulationModule, AppLauncherModule } =
+  NativeModules;
 interface AppInfo {
   label: string;
   packageName: string;
@@ -20,9 +38,9 @@ interface AppInfo {
 const EXAMPLE_TASKS: Task[] = [
   {
     id: '1',
-    title: '钉钉自动打卡',
+    name: '钉钉自动打卡',
     description: '早上8:32自动打卡',
-    time: '00:09',
+    time: '22:35',
     status: 'running',
     type: 'daily',
     enabled: true,
@@ -36,33 +54,33 @@ const EXAMPLE_TASKS: Task[] = [
         type: 'swipe',
         parameters: {
           direction: 'up',
-          duration: 300
+          duration: 300,
         },
-        delay: 1000
+        delay: 1000,
       },
       {
         id: 'launch_dingtalk_1',
         type: 'launch_app',
         parameters: {
           packageName: 'com.alibaba.android.rimet',
-          userId: 0
+          userId: 0,
         },
-        delay: 2000
+        delay: 2000,
       },
       {
         id: 'close_dingtalk_1',
         type: 'close_app',
-        parameters:{
+        parameters: {
           packageName: 'com.alibaba.android.rimet',
-          userId: 0
+          userId: 0,
         },
-        delay: 2000
-      }
+        delay: 2000,
+      },
     ],
   },
   {
     id: '2',
-    title: '钉钉自动打卡',
+    name: '钉钉自动打卡',
     description: '下午18:33自动打卡',
     time: '18:33',
     status: 'running',
@@ -71,24 +89,24 @@ const EXAMPLE_TASKS: Task[] = [
       {
         id: 'swipe_up_1',
         type: 'wake_up',
-        delay: 1000
+        delay: 1000,
       },
       {
         id: 'launch_dingtalk_1',
         type: 'launch_app',
         parameters: {
           packageName: 'com.alibaba.android.rimet',
-          userId: 0
+          userId: 0,
         },
       },
       {
         id: 'close_dingtalk_1',
         type: 'close_app',
-        parameters:{
+        parameters: {
           packageName: 'com.alibaba.android.rimet',
-          userId: 0
-        }
-      }
+          userId: 0,
+        },
+      },
     ],
     enabled: true,
   },
@@ -123,12 +141,18 @@ function TaskHeader() {
 //   stopped: { label: '未运行', color: '#999' },
 // };
 
-function TaskItem({ item, onToggle, onEdit, onExecute, onDelete }: { 
-  item: Task, 
-  onToggle: (id: string) => void,
-  onEdit: (task: Task) => void,
-  onExecute: (task: Task) => void,
-  onDelete: (id: string) => void
+function TaskItem({
+  item,
+  onToggle,
+  onEdit,
+  onExecute,
+  onDelete,
+}: {
+  item: Task;
+  onToggle: (id: string) => void;
+  onEdit: (task: Task) => void;
+  onExecute: (task: Task) => void;
+  onDelete: (id: string) => void;
 }) {
   const isSwitchOn = item.status !== 'stopped';
 
@@ -137,7 +161,9 @@ function TaskItem({ item, onToggle, onEdit, onExecute, onDelete }: {
       <Card.Content style={styles.cardContent}>
         <View style={styles.taskMainInfo}>
           <View style={styles.titleRow}>
-            <Text style={styles.taskTitle} numberOfLines={1}>{item.title}</Text>
+            <Text style={styles.taskTitle} numberOfLines={1}>
+              {item.name}
+            </Text>
             <Switch
               value={isSwitchOn}
               onValueChange={() => onToggle(item.id)}
@@ -145,38 +171,43 @@ function TaskItem({ item, onToggle, onEdit, onExecute, onDelete }: {
               style={styles.taskSwitch}
             />
           </View>
-          
+
           {item.description && (
-            <Text style={styles.taskDescription} numberOfLines={1}>{item.description}</Text>
+            <Text style={styles.taskDescription} numberOfLines={1}>
+              {item.description}
+            </Text>
           )}
-          
+
           <View style={styles.taskFooter}>
-            <View style={styles.timeInfo}>
+            <TouchableOpacity
+              style={styles.timeInfo}
+              onPress={() => onEdit(item)}
+            >
               <Icon source="clock-outline" size={14} color="#666" />
               <Text style={styles.taskTime}>{item.time}</Text>
               <View style={styles.dot} />
               <Text style={styles.instructionCount}>
                 {item.instruction.length} 个指令
               </Text>
-            </View>
-            
+            </TouchableOpacity>
+
             <View style={styles.actionButtons}>
-              <IconButton 
-                icon="pencil-outline" 
-                size={18} 
+              <IconButton
+                icon="pencil-outline"
+                size={18}
                 onPress={() => onEdit(item)}
                 style={styles.iconBtn}
               />
-              <IconButton 
-                icon="delete-outline" 
-                size={18} 
+              <IconButton
+                icon="delete-outline"
+                size={18}
                 iconColor="#FF5252"
                 onPress={() => onDelete(item.id)}
                 style={styles.iconBtn}
               />
-              <IconButton 
-                icon="play" 
-                size={18} 
+              <IconButton
+                icon="play"
+                size={18}
                 iconColor="#4CAF50"
                 onPress={() => onExecute(item)}
                 style={styles.iconBtn}
@@ -190,100 +221,131 @@ function TaskItem({ item, onToggle, onEdit, onExecute, onDelete }: {
 }
 
 export default function TaskScreen() {
-  const [tasks, setTasks] = useState<Task[]>(EXAMPLE_TASKS);
+  const [tasks, setTasks] = useState<Task[]>([]); // 初始为空，由 BackgroundTaskManager 加载
   const [isAppPickerVisible, setAppPickerVisible] = useState(false);
   const [installedApps, setInstalledApps] = useState<AppInfo[]>([]);
-  const [isInstructionEditorVisible, setInstructionEditorVisible] = useState(false);
+  const [isInstructionEditorVisible, setInstructionEditorVisible] =
+    useState(false);
   const [isCreateTaskModalVisible, setCreateTaskModalVisible] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   useEffect(() => {
-    // 初始化时添加一些示例任务
-    tasks.forEach(task => {
-      BackgroundTaskManager.addTask(
-        task.id,
-        task.title,
-        task.time,
-        task.instruction
-      );
-    });
-    return () => {
-
+    // 从 BackgroundTaskManager 加载已持久化的任务
+    const loadData = async () => {
+      // 等待实例初始化（内部会调用 loadTasks）
+      // 这里的 tasks 已经是单例，loadTasks 在 constructor 中异步执行
+      // 为了确保 UI 同步，我们可以稍微延迟或直接获取
+      setTimeout(() => {
+        const loadedTasks = BackgroundTaskManager.getAllTasks();
+        if (loadedTasks.length > 0) {
+          console.log('loadedTasks', loadedTasks);
+          setTasks(loadedTasks);
+        } else {
+          setTasks(EXAMPLE_TASKS);
+        }
+        tasks.forEach(task => {
+          BackgroundTaskManager.addTask(task);
+        });
+      }, 500);
     };
-  }, [tasks]);
+    loadData();
+  }, []);
 
   const handleToggle = (id: string) => {
-    setTasks(prev => prev.map(task => {
-      if (task.id === id) {
-        const newStatus: 'running' | 'stopped' = task.status === 'stopped' ? 'running' : 'stopped';
-        const updatedTask = {
-          ...task,
-          status: newStatus,
-          enabled: newStatus === 'running'
-        };
+    setTasks(prev => {
+      const newTasks = prev.map(task => {
+        if (task.id === id) {
+          const newStatus: 'running' | 'stopped' =
+            task.status === 'stopped' ? 'running' : 'stopped';
+          const updatedTask = {
+            ...task,
+            status: newStatus,
+            enabled: newStatus === 'running',
+          };
 
-        // 同步到BackgroundTaskManager
-        if (newStatus === 'running') {
-          BackgroundTaskManager.enableTask(task.id);
-        } else {
-          BackgroundTaskManager.disableTask(task.id);
+          // 同步到BackgroundTaskManager
+          if (newStatus === 'running') {
+            BackgroundTaskManager.enableTask(task.id);
+          } else {
+            BackgroundTaskManager.disableTask(task.id);
+          }
+
+          return updatedTask;
         }
-
-        return updatedTask;
-      }
-      return task;
-    }));
+        return task;
+      });
+      return newTasks;
+    });
   };
 
   const handleEditTask = (task: Task) => {
     setEditingTask(task);
-    setInstructionEditorVisible(true);
+    setCreateTaskModalVisible(true);
   };
-
   const handleDeleteTask = (id: string) => {
-    Alert.alert(
-      '确认删除',
-      '确定要删除这个任务吗？',
-      [
-        { text: '取消', style: 'cancel' },
-        { 
-          text: '删除', 
-          style: 'destructive',
-          onPress: () => {
-            setTasks(prev => prev.filter(task => task.id !== id));
-            BackgroundTaskManager.removeTask(id);
-          }
+    Alert.alert('确认删除', '确定要删除这个任务吗？', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: () => {
+          setTasks(prev => prev.filter(task => task.id !== id));
+          BackgroundTaskManager.removeTask(id);
+          Alert.alert('删除成功', '任务已删除');
         },
-      ]
-    );
+      },
+    ]);
   };
 
-  const handleSaveNewTask = (taskData: Omit<Task, 'id'>) => {
-    const newTask: Task = {
-      ...taskData,
-      id: Date.now().toString(), // 简单生成 ID
-    };
+  const handleClearAllTasks = () => {
+    Alert.alert('确认清空', '确定要清空所有任务吗？此操作不可恢复。', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '全部清空',
+        style: 'destructive',
+        onPress: () => {
+          setTasks([]);
+          BackgroundTaskManager.clearTasks();
+          Alert.alert('清空成功', '所有本地任务已清除');
+        },
+      },
+    ]);
+  };
 
-    setTasks(prev => [...prev, newTask]);
-    
-    // 同步到 BackgroundTaskManager
-    BackgroundTaskManager.addTask(
-      newTask.id,
-      newTask.title,
-      newTask.time,
-      newTask.instruction
-    );
-    
-    Alert.alert('创建成功', `任务 "${newTask.title}" 已创建`);
+  const handleSaveTask = (taskData: Omit<Task, 'id'>, id?: string) => {
+    if (id) {
+      // 修改任务
+      const updatedTask: Task = { ...taskData, id: id };
+      setTasks(prev => prev.map(t => (t.id === id ? updatedTask : t)));
+
+      // 同步到 BackgroundTaskManager
+      BackgroundTaskManager.addTask(updatedTask);
+
+      Alert.alert('修改成功', `任务 "${taskData.name}" 已更新`);
+    } else {
+      // 新增任务
+      const newTask: Task = {
+        ...taskData,
+        id: Date.now().toString(),
+      };
+
+      setTasks(prev => [...prev, newTask]);
+
+      // 同步到 BackgroundTaskManager
+      BackgroundTaskManager.addTask(newTask);
+
+      Alert.alert('创建成功', `任务 "${newTask.name}" 已创建`);
+    }
+    setEditingTask(null);
   };
 
   const handleExecuteTask = async (task: Task) => {
     try {
       await requestForegroundPermission();
       BackgroundTaskManager.executeTaskById(task.id);
-      Alert.alert('执行成功', `任务 "${task.title}" 已执行`);
+      Alert.alert('执行成功', `任务 "${task.name}-${task.id}" 已执行`);
     } catch (error: any) {
-      Alert.alert('执行失败', `执行任务 "${task.title}" 失败: ${error.message}`);
+      Alert.alert('执行失败', `执行任务 "${task.name}" 失败: ${error.message}`);
     }
   };
 
@@ -291,20 +353,13 @@ export default function TaskScreen() {
     if (!editingTask) return;
 
     try {
-      setTasks(prev => prev.map(task => 
-        task.id === editingTask.id 
-          ? { ...task, instruction: instructions }
-          : task
-      ));
+      const updatedTask: Task = { ...editingTask, instruction: instructions };
+      setTasks(prev =>
+        prev.map(task => (task.id === editingTask.id ? updatedTask : task)),
+      );
 
-      // 同步到BackgroundTaskManager
-      const updatedTask = { ...editingTask, instruction: instructions };
-      // 更新任务指令列表
-      const existingTask = BackgroundTaskManager.getTask(updatedTask.id);
-      if (existingTask) {
-        existingTask.list = instructions;
-        BackgroundTaskManager.syncToNative();
-      }
+      // 同步到 BackgroundTaskManager 并持久化
+      BackgroundTaskManager.addTask(updatedTask);
 
       setInstructionEditorVisible(false);
       setEditingTask(null);
@@ -314,48 +369,55 @@ export default function TaskScreen() {
     }
   };
 
-const requestForegroundPermission = async () => {
-  if (Platform.OS === 'android') {
-    try {
-      const permissionsToRequest = [];
+  const requestForegroundPermission = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        const permissionsToRequest = [];
 
-      if (Platform.Version >= 33) {
-        permissionsToRequest.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
-      }
-
-      if (permissionsToRequest.length > 0) {
-        const results = await PermissionsAndroid.requestMultiple(permissionsToRequest);
-        const allGranted = Object.values(results).every(
-          result => result === PermissionsAndroid.RESULTS.GRANTED
-        );
-        if (!allGranted) {
-          console.warn('部分权限未授予:', results);
+        if (Platform.Version >= 33) {
+          permissionsToRequest.push(
+            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+          );
         }
-      }
 
-      // 引导用户开启忽略电池优化
-      if (WakeScreenModule && WakeScreenModule.requestIgnoreBatteryOptimizations) {
-        WakeScreenModule.requestIgnoreBatteryOptimizations();
-      }
+        if (permissionsToRequest.length > 0) {
+          const results = await PermissionsAndroid.requestMultiple(
+            permissionsToRequest,
+          );
+          const allGranted = Object.values(results).every(
+            result => result === PermissionsAndroid.RESULTS.GRANTED,
+          );
+          if (!allGranted) {
+            console.warn('部分权限未授予:', results);
+          }
+        }
 
-      return true;
-    } catch (err) {
-      console.error('权限申请失败：', err);
-      return false;
+        // 引导用户开启忽略电池优化
+        if (
+          WakeScreenModule &&
+          WakeScreenModule.requestIgnoreBatteryOptimizations
+        ) {
+          WakeScreenModule.requestIgnoreBatteryOptimizations();
+        }
+
+        return true;
+      } catch (err) {
+        console.error('权限申请失败：', err);
+        return false;
+      }
     }
-  }
-  return true;
-};
+    return true;
+  };
   const cronSchedule = async () => {
     if (BackgroundTaskManager.isServiceRunning()) {
       Alert.alert('已停止', '后台调度服务已停止');
       await BackgroundTaskManager.stop();
     } else {
       const hasPermission = await requestForegroundPermission();
-    if (!hasPermission) {
-      Alert.alert('权限不足', '未获取前台服务权限，无法启动后台任务');
-      return;
-    }
+      if (!hasPermission) {
+        Alert.alert('权限不足', '未获取前台服务权限，无法启动后台任务');
+        return;
+      }
       Alert.alert('已启动', '后台调度服务已启动，将每分钟检查一次任务');
       await BackgroundTaskManager.start();
     }
@@ -407,10 +469,10 @@ const requestForegroundPermission = async () => {
   return (
     <View style={styles.pageContainer}>
       <TaskHeader />
-      
+
       <View style={styles.specialActionBox}>
-        <Button 
-          mode="contained" 
+        <Button
+          mode="contained"
           onPress={() => cronSchedule()}
           icon="timer-outline"
           style={styles.wakeButton}
@@ -418,8 +480,8 @@ const requestForegroundPermission = async () => {
           启动后台通知服务
         </Button>
 
-        <Button 
-          mode="text" 
+        <Button
+          mode="text"
           onPress={handleOpenSettings}
           icon="cog-outline"
           style={{ marginTop: 4 }}
@@ -428,8 +490,8 @@ const requestForegroundPermission = async () => {
           亮屏失败？去设置开启“后台弹出界面”和“锁屏显示”
         </Button>
 
-        <Button 
-          mode="text" 
+        <Button
+          mode="text"
           onPress={handleOpenAccessibility}
           icon="gesture-tap"
           style={{ marginTop: -4 }}
@@ -438,8 +500,8 @@ const requestForegroundPermission = async () => {
           模拟上滑失败？去开启“辅助功能”服务
         </Button>
 
-        <Button 
-          mode="text" 
+        <Button
+          mode="text"
           onPress={openCommonAppsPicker}
           icon="star-outline"
           style={{ marginTop: -4 }}
@@ -458,16 +520,21 @@ const requestForegroundPermission = async () => {
 
       <View style={styles.listHeader}>
         <Text style={styles.listTitle}>任务列表</Text>
-        <TouchableOpacity>
-          <Text style={styles.filterText}>全部任务</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity onPress={handleClearAllTasks} style={{ marginRight: 16 }}>
+            <Text style={[styles.filterText, { color: '#FF5252' }]}>清空全部</Text>
+          </TouchableOpacity>
+          <TouchableOpacity>
+            <Text style={styles.filterText}>全部任务</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
         data={tasks}
         renderItem={({ item }) => (
-          <TaskItem 
-            item={item} 
+          <TaskItem
+            item={item}
             onToggle={handleToggle}
             onEdit={handleEditTask}
             onExecute={handleExecuteTask}
@@ -488,8 +555,12 @@ const requestForegroundPermission = async () => {
       {/* 创建任务弹窗 */}
       <CreateTaskModal
         visible={isCreateTaskModalVisible}
-        onClose={() => setCreateTaskModalVisible(false)}
-        onSave={handleSaveNewTask}
+        onClose={() => {
+          setCreateTaskModalVisible(false);
+          setEditingTask(null);
+        }}
+        onSave={handleSaveTask}
+        editTask={editingTask}
       />
 
       {/* 指令编辑器 */}

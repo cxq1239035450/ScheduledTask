@@ -72,7 +72,7 @@ export type TaskInstruction =
 // 任务定义
 export interface Task {
   id: string;
-  title: string;
+  name: string;
   description?: string;
   time: string; // 执行时间 "HH:MM"
   status: 'running' | 'stopped' | 'error';

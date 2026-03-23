@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, ScrollView, Alert } from 'react-native';
 import { Modal as PaperModal, Button, Title, Divider } from 'react-native-paper';
 import { Icon } from 'react-native-paper';
@@ -8,19 +8,32 @@ import { InstructionEditor } from './InstructionEditor';
 interface CreateTaskModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (task: Omit<Task, 'id'>) => void;
+  onSave: (task: Omit<Task, 'id'>, id?: string) => void;
+  editTask?: Task | null;
 }
 
-export function CreateTaskModal({ visible, onClose, onSave }: CreateTaskModalProps) {
-  const [title, setTitle] = useState('');
+export function CreateTaskModal({ visible, onClose, onSave, editTask }: CreateTaskModalProps) {
+  const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [time, setTime] = useState('');
   const [type, setType] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [instruction, setInstruction] = useState<TaskInstruction[]>([]);
   const [isInstructionEditorVisible, setInstructionEditorVisible] = useState(false);
 
+  useEffect(() => {
+    if (editTask) {
+      setName(editTask.name||'');
+      setDescription(editTask.description || '');
+      setTime(editTask.time);
+      setType(editTask.type);
+      setInstruction(editTask.instruction || []);
+    } else {
+      resetForm();
+    }
+  }, [editTask, visible]);
+
   const handleSave = () => {
-    if (!title.trim()) {
+    if (!name.trim()) {
       Alert.alert('错误', '请输入任务标题');
       return;
     }
@@ -29,23 +42,23 @@ export function CreateTaskModal({ visible, onClose, onSave }: CreateTaskModalPro
       return;
     }
 
-    const newTask: Omit<Task, 'id'> = {
-      title: title.trim(),
+    const taskData: Omit<Task, 'id'> = {
+      name: name.trim(),
       description: description.trim(),
       time: time.trim(),
       type,
-      status: 'stopped',
-      enabled: false,
+      status: editTask ? editTask.status : 'stopped',
+      enabled: editTask ? editTask.enabled : false,
       instruction,
     };
 
-    onSave(newTask);
+    onSave(taskData, editTask?.id);
     resetForm();
     onClose();
   };
 
   const resetForm = () => {
-    setTitle('');
+    setName('');
     setDescription('');
     setTime('');
     setType('daily');
@@ -63,15 +76,15 @@ export function CreateTaskModal({ visible, onClose, onSave }: CreateTaskModalPro
       onDismiss={handleCancel}
       contentContainerStyle={styles.modalContainer}
     >
-      <Title style={styles.title}>创建新任务</Title>
+      <Title style={styles.title}>{editTask ? '修改任务' : '创建新任务'}</Title>
       
       <ScrollView style={styles.scrollView}>
         <View style={styles.formGroup}>
           <Text style={styles.label}>任务标题 *</Text>
           <TextInput
             style={styles.input}
-            value={title}
-            onChangeText={setTitle}
+            value={name}
+            onChangeText={setName}
             placeholder="请输入任务标题"
             maxLength={50}
           />
@@ -164,9 +177,9 @@ export function CreateTaskModal({ visible, onClose, onSave }: CreateTaskModalPro
           mode="contained" 
           onPress={handleSave}
           style={styles.saveButton}
-          disabled={!title.trim() || !time.trim()}
+          disabled={!name.trim() || !time.trim()}
         >
-          创建任务
+          {editTask ? '保存修改' : '创建任务'}
         </Button>
       </View>
     </PaperModal>
