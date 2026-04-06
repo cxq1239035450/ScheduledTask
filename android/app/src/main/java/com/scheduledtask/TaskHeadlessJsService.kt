@@ -17,7 +17,7 @@ class TaskHeadlessJsService : HeadlessJsTaskService() {
         if (wakeLock == null) {
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ScheduledTask::HeadlessTaskLock")
-            wakeLock?.acquire(35000L) // 锁定 35 秒，略长于任务超时时间
+            wakeLock?.acquire(120000L) // 锁定 120 秒（2分钟），确保复杂任务能执行完
         }
 
         return if (extras != null) {
@@ -25,7 +25,7 @@ class TaskHeadlessJsService : HeadlessJsTaskService() {
             HeadlessJsTaskConfig(
                 "BackgroundTask", // 任务名称，需要在 JS 侧注册
                 Arguments.fromBundle(extras),
-                30000, // 超时时间增加到30秒，给足够时间处理应用切换
+                100000, // 超时时间增加到 100 秒，给足够时间处理应用切换和多步操作
                 true // 允许在后台运行
             )
         } else {

@@ -130,11 +130,11 @@ class ForegroundRunningService : Service() {
                     putExtra("taskId", taskId)
                 }
                 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(serviceIntent)
-                } else {
-                    startService(serviceIntent)
-                }
+                // HeadlessJsTaskService 在内部会自动处理 Foreground 逻辑（如果配置了超时等），
+                // 在已经运行 Foreground Service 的情况下，直接 startService 即可，
+                // 严禁在没有在 TaskHeadlessJsService.onCreate 中显式调用 startForeground 的情况下使用 startForegroundService，
+                // 否则会导致 Android 8.0+ 系统抛出 ForegroundServiceDidNotStartInTimeException 导致应用崩溃。
+                startService(serviceIntent)
                 Log.d("ForegroundService", "Started Headless JS for task: $taskId")
                 
                 // 等待一小段时间确保任务开始执行
