@@ -19,7 +19,7 @@ import {
   IconButton,
 } from 'react-native-paper';
 import BackgroundTaskManager from '../../utils/BackgroundTaskManager';
-import LogManager from '../../utils/LogManager';
+import LogManager, { LogEntry } from '../../utils/LogManager';
 import AppManager from '../../utils/AppManager';
 import { Task, TaskInstruction } from '../../types/TaskInstruction';
 import { InstructionEditor } from './components/InstructionEditor';
@@ -112,22 +112,28 @@ const EXAMPLE_TASKS: Task[] = [
   },
 ];
 
-function TaskHeader() {
+interface TaskStats {
+  running: number;
+  todayTriggered: number;
+  errors: number;
+}
+
+function TaskHeader({ stats }: { stats: TaskStats }) {
   return (
     <View style={styles.headerContainer}>
       <View style={styles.statBox}>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>2</Text>
+          <Text style={styles.statValue}>{stats.running}</Text>
           <Text style={styles.statLabel}>运行中</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>12</Text>
+          <Text style={styles.statValue}>{stats.todayTriggered}</Text>
           <Text style={styles.statLabel}>今日触发</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={[styles.statItem]}>
-          <Text style={[styles.statValue, { color: '#FF5252' }]}>1</Text>
+          <Text style={[styles.statValue, { color: '#FF5252' }]}>{stats.errors}</Text>
           <Text style={styles.statLabel}>异常</Text>
         </View>
       </View>
@@ -222,6 +228,7 @@ function TaskItem({
 
 export default function TaskScreen() {
   const [tasks, setTasks] = useState<Task[]>([]); // 初始为空，由 BackgroundTaskManager 加载
+  const [stats, setStats] = useState<TaskStats>({ running: 0, todayTriggered: 0, errors: 0 });
   const [isAppPickerVisible, setAppPickerVisible] = useState(false);
   const [installedApps, setInstalledApps] = useState<AppInfo[]>([]);
   const [isInstructionEditorVisible, setInstructionEditorVisible] =
@@ -242,14 +249,49 @@ export default function TaskScreen() {
           setTasks(loadedTasks);
         } else {
           setTasks(EXAMPLE_TASKS);
+          EXAMPLE_TASKS.forEach(task => {
+            BackgroundTaskManager.addTask(task);
+          });
         }
-        tasks.forEach(task => {
-          BackgroundTaskManager.addTask(task);
-        });
       }, 500);
     };
     loadData();
+
+    // 订阅日志以更新统计数据
+    const unsubscribeLogs = LogManager.subscribe((logs) => {
+      calculateStats(tasks, logs);
+    });
+
+    return () => {
+      unsubscribeLogs();
+    };
   }, []);
+
+  // 当任务列表变化时也更新统计
+  useEffect(() => {
+    LogManager.getLogs().then(logs => {
+      calculateStats(tasks, logs);
+    });
+  }, [tasks]);
+
+  const calculateStats = (currentTasks: Task[], logs: LogEntry[]) => {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    
+    const todayLogs = logs.filter(log => log.timestamp >= startOfDay);
+    
+    const running = currentTasks.filter(t => t.enabled).length;
+    
+    // 今日触发：计算包含“执行定时任务”关键字的日志数量
+    const todayTriggered = todayLogs.filter(log => 
+      log.message.includes('执行定时任务') || log.message.includes('任务执行成功')
+    ).length;
+
+    // 异常：今日日志中类型为 'error' 的数量
+    const errors = todayLogs.filter(log => log.type === 'error').length;
+
+    setStats({ running, todayTriggered, errors });
+  };
 
   const handleToggle = (id: string) => {
     setTasks(prev => {
@@ -423,10 +465,6 @@ export default function TaskScreen() {
     }
   };
 
-  const handleOpenSettings = () => {
-    WakeScreenModule.openSettings();
-  };
-
   const handleOpenAccessibility = () => {
     TouchSimulationModule.openAccessibilitySettings();
   };
@@ -468,7 +506,7 @@ export default function TaskScreen() {
 
   return (
     <View style={styles.pageContainer}>
-      <TaskHeader />
+      <TaskHeader stats={stats} />
 
       <View style={styles.specialActionBox}>
         <Button
@@ -478,16 +516,6 @@ export default function TaskScreen() {
           style={styles.wakeButton}
         >
           启动后台通知服务
-        </Button>
-
-        <Button
-          mode="text"
-          onPress={handleOpenSettings}
-          icon="cog-outline"
-          style={{ marginTop: 4 }}
-          labelStyle={{ fontSize: 12 }}
-        >
-          亮屏失败？去设置开启“后台弹出界面”和“锁屏显示”
         </Button>
 
         <Button
