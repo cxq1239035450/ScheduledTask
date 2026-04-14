@@ -229,6 +229,7 @@ function TaskItem({
 export default function TaskScreen() {
   const [tasks, setTasks] = useState<Task[]>([]); // 初始为空，由 BackgroundTaskManager 加载
   const [stats, setStats] = useState<TaskStats>({ running: 0, todayTriggered: 0, errors: 0 });
+  const [serviceSwitching, setServiceSwitching] = useState(false);
   const [isAppPickerVisible, setAppPickerVisible] = useState(false);
   const [installedApps, setInstalledApps] = useState<AppInfo[]>([]);
   const [isInstructionEditorVisible, setInstructionEditorVisible] =
@@ -431,6 +432,7 @@ export default function TaskScreen() {
           );
           if (!allGranted) {
             console.warn('部分权限未授予:', results);
+            return false;
           }
         }
 
@@ -451,17 +453,29 @@ export default function TaskScreen() {
     return true;
   };
   const cronSchedule = async () => {
-    if (BackgroundTaskManager.isServiceRunning()) {
-      Alert.alert('已停止', '后台调度服务已停止');
-      await BackgroundTaskManager.stop();
-    } else {
-      const hasPermission = await requestForegroundPermission();
-      if (!hasPermission) {
-        Alert.alert('权限不足', '未获取前台服务权限，无法启动后台任务');
-        return;
+    if (serviceSwitching) {
+      return;
+    }
+
+    setServiceSwitching(true);
+    try {
+      const isRunning = await BackgroundTaskManager.refreshServiceRunningState();
+      if (isRunning) {
+        await BackgroundTaskManager.stop();
+        Alert.alert('已停止', '后台调度服务已停止');
+      } else {
+        const hasPermission = await requestForegroundPermission();
+        if (!hasPermission) {
+          Alert.alert('权限不足', '请允许通知权限后再启动后台服务。');
+          return;
+        }
+        await BackgroundTaskManager.start();
+        Alert.alert('已启动', '后台调度服务已启动，将每分钟检查一次任务');
       }
-      Alert.alert('已启动', '后台调度服务已启动，将每分钟检查一次任务');
-      await BackgroundTaskManager.start();
+    } catch (error: any) {
+      Alert.alert('操作失败', error?.message || '启停服务失败，请重试');
+    } finally {
+      setServiceSwitching(false);
     }
   };
 
@@ -512,6 +526,7 @@ export default function TaskScreen() {
         <Button
           mode="contained"
           onPress={() => cronSchedule()}
+          disabled={serviceSwitching}
           icon="timer-outline"
           style={styles.wakeButton}
         >

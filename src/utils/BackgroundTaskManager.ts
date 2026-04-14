@@ -327,13 +327,31 @@ class BackgroundTaskManager {
             this.updateNotificationStatus();
         } catch (e) {
             console.error('Failed to start background service', e);
+            throw e;
         }
     }
 
     public async stop() {
-        await BackgroundTaskModule.stopService();
-        this.isRunning = false;
-        await LogManager.addLog('后台调度服务已停止', 'info', '系统');
+        try {
+            await BackgroundTaskModule.stopService();
+            this.isRunning = false;
+            await LogManager.addLog('后台调度服务已停止', 'info', '系统');
+        } catch (e) {
+            console.error('Failed to stop background service', e);
+            throw e;
+        }
+    }
+
+    public async refreshServiceRunningState(): Promise<boolean> {
+        try {
+            if (BackgroundTaskModule && typeof BackgroundTaskModule.isServiceRunning === 'function') {
+                const running = !!(await BackgroundTaskModule.isServiceRunning());
+                this.isRunning = running;
+            }
+        } catch (e) {
+            console.error('Failed to refresh service state from native', e);
+        }
+        return this.isRunning;
     }
 
     public isServiceRunning() {

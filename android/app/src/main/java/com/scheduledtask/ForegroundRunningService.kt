@@ -24,6 +24,11 @@ import java.util.Locale
  * 用于保持应用在后台运行，降低被系统杀死的可能性。
  */
 class ForegroundRunningService : Service() {
+    companion object {
+        @Volatile
+        var isServiceActive: Boolean = false
+    }
+
     private val notificationId = 9999
     private val channelId = "foreground_running_service_channel"
     private var taskTitle = "ScheduledTask 正在后台运行"
@@ -157,6 +162,7 @@ class ForegroundRunningService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isServiceActive = true
         Log.d("ForegroundService", "Service onCreate")
         
         createNotificationChannel()
@@ -251,6 +257,7 @@ class ForegroundRunningService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isServiceActive = false
         unregisterReceiver(systemBroadcastReceiver)
     }
 
