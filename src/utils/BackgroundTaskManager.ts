@@ -6,6 +6,7 @@ import { Task, TaskInstruction } from '../types/TaskInstruction';
 const { BackgroundTaskModule, WakeScreenModule, TouchSimulationModule, AppLauncherModule } = NativeModules;
 
 const STORAGE_KEY = 'scheduled_tasks';
+const SERVICE_STATE_KEY = 'service_running_state';
 
 export type ScheduledTask = Task;
 
@@ -19,10 +20,12 @@ class BackgroundTaskManager {
     private isRunning: boolean = false;
     private tasks: Map<string, ScheduledTask> = new Map();
     private tickSubscription: any = null;
+    private executeTaskSubscription: any = null;
 
     private constructor() {
-        // 初始化时加载本地任务
+        // 初始化时加载本地任务和状态
         this.loadTasks();
+        this.loadServiceState();
 
         // 注册原生事件监听：每分钟心跳，用于更新通知状态
         this.tickSubscription = DeviceEventEmitter.addListener('onTick', () => {
@@ -30,7 +33,7 @@ class BackgroundTaskManager {
         });
 
         // 注册原生事件监听：由 Native 触发的具体任务执行
-        DeviceEventEmitter.addListener('executeTask', (taskId: string) => {
+        this.executeTaskSubscription = DeviceEventEmitter.addListener('executeTask', (taskId: string) => {
             console.log(`BackgroundTaskManager: Native triggered execution for task: ${taskId}`);
             this.executeTaskById(taskId);
         });
@@ -67,6 +70,26 @@ class BackgroundTaskManager {
         }
     }
 
+    private async loadServiceState() {
+        try {
+            const state = await AsyncStorage.getItem(SERVICE_STATE_KEY);
+            if (state !== null) {
+                this.isRunning = state === 'true';
+                console.log(`BackgroundTaskManager: 已从本地加载服务状态 isRunning=${this.isRunning}`);
+            }
+        } catch (e) {
+            console.error('Failed to load service state', e);
+        }
+    }
+
+    private async saveServiceState() {
+        try {
+            await AsyncStorage.setItem(SERVICE_STATE_KEY, this.isRunning.toString());
+        } catch (e) {
+            console.error('Failed to save service state', e);
+        }
+    }
+
     public async syncToNative() {
         if (!BackgroundTaskModule) {
             console.error('BackgroundTaskManager: BackgroundTaskModule is null');
@@ -93,7 +116,7 @@ class BackgroundTaskManager {
         const { type, delay, parameters } = step;
         
         if (delay) {
-            await new Promise(resolve => setTimeout(resolve, delay));
+            await new Promise<void>(resolve => setTimeout(() => resolve(), delay));
         }
 
         switch (type) {
@@ -169,7 +192,7 @@ class BackgroundTaskManager {
                         await LogManager.addLog(`应用启动成功: ${parameters?.packageName}`, 'success', taskName);
                         // 启动应用后，我们手动等待一段时间，给系统切换应用的时间
                         console.log(`BackgroundTaskManager: launch_app 后等待 5 秒...`);
-                        await new Promise(resolve => setTimeout(resolve, 5000));
+                        await new Promise<void>(resolve => setTimeout(() => resolve(), 5000));
                     } else {
                         throw new Error(`应用启动失败: ${parameters?.packageName}`);
                     }
@@ -195,7 +218,7 @@ class BackgroundTaskManager {
             case 'wait':
                 console.log(`BackgroundTaskManager: 执行 wait`, parameters);
                 const duration = parameters?.duration ?? 1000;
-                await new Promise(resolve => setTimeout(resolve, duration));
+                await new Promise<void>(resolve => setTimeout(() => resolve(), duration));
                 await LogManager.addLog(`等待完成: ${duration}ms`, 'info', taskName);
                 break;
 
@@ -241,13 +264,14 @@ class BackgroundTaskManager {
                 // 只有在不是最后一步时才增加额外的步间延迟
                 if (i < task.instruction.length - 1) {
                     console.log(`BackgroundTaskManager: 等待 2 秒后执行下一步...`);
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    await new Promise<void>(resolve => setTimeout(() => resolve(), 2000));
                 }
             }
             console.log(`BackgroundTaskManager: 所有步骤执行完成`);
             await LogManager.addLog(`任务执行成功: ${task.name}`, 'success', task.name);
 
             task.lastExecuted = now;
+            this.saveTasks();
         } catch (error: any) {
             console.error(`BackgroundTaskManager: 任务 ${task.name} 执行失败`, error);
             await LogManager.addLog(`任务执行失败: ${task.name} - ${error.message}`, 'error', task.name);
@@ -322,6 +346,7 @@ class BackgroundTaskManager {
         try {
             await BackgroundTaskModule.startService(defaultOptions);
             this.isRunning = true;
+            this.saveServiceState();
             await LogManager.addLog('后台调度服务已启动', 'info', '系统');
             await this.syncToNative();
             this.updateNotificationStatus();
@@ -333,6 +358,7 @@ class BackgroundTaskManager {
     public async stop() {
         await BackgroundTaskModule.stopService();
         this.isRunning = false;
+        this.saveServiceState();
         await LogManager.addLog('后台调度服务已停止', 'info', '系统');
     }
 
@@ -397,6 +423,17 @@ class BackgroundTaskManager {
         console.log('BackgroundTaskManager: 已清空所有任务');
         this.syncToNative();
         this.saveTasks(); // 持久化清空后的状态
+    }
+
+    public destroy(): void {
+        if (this.tickSubscription) {
+            this.tickSubscription.remove();
+            this.tickSubscription = null;
+        }
+        if (this.executeTaskSubscription) {
+            this.executeTaskSubscription.remove();
+            this.executeTaskSubscription = null;
+        }
     }
 
     

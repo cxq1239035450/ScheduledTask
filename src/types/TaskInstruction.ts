@@ -220,10 +220,15 @@ export const INSTRUCTION_VALIDATION_RULES: {
 } = {
   launch_app: {
     packageName: { required: true, type: 'string' },
-    waitForLaunch: { required: false, type: 'number', min: 0 },
+    userId: { required: false, type: 'number', min: 0 },
+  },
+  close_app: {
+    packageName: { required: true, type: 'string' },
+    userId: { required: false, type: 'number', min: 0 },
   },
   click: {
-    target: { required: true, type: 'object' },
+    x: { required: true, type: 'number' },
+    y: { required: true, type: 'number' },
     longPress: { required: false, type: 'boolean' },
     duration: { required: false, type: 'number', min: 0 },
   },
@@ -231,28 +236,15 @@ export const INSTRUCTION_VALIDATION_RULES: {
     direction: {
       required: true,
       type: 'string',
-      enum: ['up', 'down', 'left', 'right', 'custom'],
+      enum: ['up', 'down', 'left', 'right'],
     },
+    startX: { required: false, type: 'number' },
+    startY: { required: false, type: 'number' },
+    endX: { required: false, type: 'number' },
+    endY: { required: false, type: 'number' },
     duration: { required: false, type: 'number', min: 0 },
-    distance: { required: false, type: 'number', min: 0 },
-  },
-  input_text: {
-    text: { required: true, type: 'string' },
-    clearFirst: { required: false, type: 'boolean' },
   },
   wait: {
-    duration: { required: false, type: 'number', min: 0 },
-  },
-  toast: {
-    message: { required: true, type: 'string' },
-    duration: { required: false, type: 'string', enum: ['short', 'long'] },
-  },
-  log: {
-    level: {
-      required: true,
-      type: 'string',
-      enum: ['info', 'success', 'warning', 'error'],
-    },
-    message: { required: true, type: 'string' },
+    duration: { required: true, type: 'number', min: 0 },
   },
 };

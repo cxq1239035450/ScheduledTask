@@ -102,7 +102,6 @@ class AppManager {
       'com.alibaba.android.rimet', // 钉钉
       'com.autonavi.minimap', // 高德地图
       'com.baidu.BaiduMap', // 百度地图
-      'com.tencent.mm', // 微信
     ];
 
     try {

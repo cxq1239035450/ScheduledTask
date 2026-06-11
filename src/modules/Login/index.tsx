@@ -1,5 +1,5 @@
 import { Text } from "react-native";
 
-export default function MusicRoute() {
+export default function LoginScreen() {
   return <Text>login</Text>;
 }

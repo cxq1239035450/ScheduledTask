@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,13 @@ import {
   Alert,
   PermissionsAndroid,
   Platform,
+  Permission,
+  useColorScheme,
 } from 'react-native';
 import {
   Icon,
   FAB,
-  Card,
   Switch,
-  Button,
   IconButton,
 } from 'react-native-paper';
 import BackgroundTaskManager from '../../utils/BackgroundTaskManager';
@@ -26,15 +26,14 @@ import { InstructionEditor } from './components/InstructionEditor';
 import { AppPicker } from './components/AppPicker';
 import { CreateTaskModal } from './components/CreateTaskModal';
 
-const { WakeScreenModule, TouchSimulationModule, AppLauncherModule } =
-  NativeModules;
+const { WakeScreenModule, TouchSimulationModule } = NativeModules;
+
 interface AppInfo {
   label: string;
   packageName: string;
   userId: number;
 }
 
-// 示例任务数据
 const EXAMPLE_TASKS: Task[] = [
   {
     id: '1',
@@ -45,37 +44,10 @@ const EXAMPLE_TASKS: Task[] = [
     type: 'daily',
     enabled: true,
     instruction: [
-      {
-        id: 'wake_up_1',
-        type: 'wake_up',
-      },
-      {
-        id: 'swipe_up_1',
-        type: 'swipe',
-        parameters: {
-          direction: 'up',
-          duration: 300,
-        },
-        delay: 1000,
-      },
-      {
-        id: 'launch_dingtalk_1',
-        type: 'launch_app',
-        parameters: {
-          packageName: 'com.alibaba.android.rimet',
-          userId: 0,
-        },
-        delay: 2000,
-      },
-      {
-        id: 'close_dingtalk_1',
-        type: 'close_app',
-        parameters: {
-          packageName: 'com.alibaba.android.rimet',
-          userId: 0,
-        },
-        delay: 2000,
-      },
+      { id: 'wake_up_1', type: 'wake_up' },
+      { id: 'swipe_up_1', type: 'swipe', parameters: { direction: 'up', duration: 300 }, delay: 1000 },
+      { id: 'launch_dingtalk_1', type: 'launch_app', parameters: { packageName: 'com.alibaba.android.rimet', userId: 0 }, delay: 2000 },
+      { id: 'close_dingtalk_1', type: 'close_app', parameters: { packageName: 'com.alibaba.android.rimet', userId: 0 }, delay: 2000 },
     ],
   },
   {
@@ -85,30 +57,12 @@ const EXAMPLE_TASKS: Task[] = [
     time: '18:33',
     status: 'running',
     type: 'daily',
-    instruction: [
-      {
-        id: 'swipe_up_1',
-        type: 'wake_up',
-        delay: 1000,
-      },
-      {
-        id: 'launch_dingtalk_1',
-        type: 'launch_app',
-        parameters: {
-          packageName: 'com.alibaba.android.rimet',
-          userId: 0,
-        },
-      },
-      {
-        id: 'close_dingtalk_1',
-        type: 'close_app',
-        parameters: {
-          packageName: 'com.alibaba.android.rimet',
-          userId: 0,
-        },
-      },
-    ],
     enabled: true,
+    instruction: [
+      { id: 'wake_up_2', type: 'wake_up', delay: 1000 },
+      { id: 'launch_dingtalk_1', type: 'launch_app', parameters: { packageName: 'com.alibaba.android.rimet', userId: 0 } },
+      { id: 'close_dingtalk_1', type: 'close_app', parameters: { packageName: 'com.alibaba.android.rimet', userId: 0 } },
+    ],
   },
 ];
 
@@ -119,264 +73,158 @@ interface TaskStats {
 }
 
 function TaskHeader({ stats }: { stats: TaskStats }) {
+  const isDark = useColorScheme() === 'dark';
+  const c = {
+    bg: isDark ? '#1E1E1E' : '#FFFFFF',
+    statBg: isDark ? '#2C2C2C' : '#F5F5F5',
+    primary: isDark ? '#4FC3F7' : '#1A73E8',
+    text: isDark ? '#FFFFFF' : '#1A1A1A',
+    secondary: isDark ? '#888888' : '#999999',
+    destructive: isDark ? '#FF6B6B' : '#F44336',
+    divider: isDark ? '#333333' : '#EEEEEE',
+  };
   return (
-    <View style={styles.headerContainer}>
-      <View style={styles.statBox}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{stats.running}</Text>
-          <Text style={styles.statLabel}>运行中</Text>
+    <View style={[st.header, { backgroundColor: c.bg }]}>
+      <View style={[st.statBox, { backgroundColor: c.statBg }]}>
+        <View style={st.statItem}>
+          <Text style={[st.statValue, { color: c.primary }]}>{stats.running}</Text>
+          <Text style={[st.statLabel, { color: c.secondary }]}>运行中</Text>
         </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{stats.todayTriggered}</Text>
-          <Text style={styles.statLabel}>今日触发</Text>
+        <View style={[st.statDivider, { backgroundColor: c.divider }]} />
+        <View style={st.statItem}>
+          <Text style={[st.statValue, { color: c.text }]}>{stats.todayTriggered}</Text>
+          <Text style={[st.statLabel, { color: c.secondary }]}>今日触发</Text>
         </View>
-        <View style={styles.statDivider} />
-        <View style={[styles.statItem]}>
-          <Text style={[styles.statValue, { color: '#FF5252' }]}>{stats.errors}</Text>
-          <Text style={styles.statLabel}>异常</Text>
+        <View style={[st.statDivider, { backgroundColor: c.divider }]} />
+        <View style={st.statItem}>
+          <Text style={[st.statValue, { color: c.destructive }]}>{stats.errors}</Text>
+          <Text style={[st.statLabel, { color: c.secondary }]}>异常</Text>
         </View>
       </View>
     </View>
   );
 }
 
-// const STATUS_CONFIG = {
-//   running: { label: '运行中', color: '#4CAF50' },
-//   error: { label: '异常', color: '#FF5252' },
-//   stopped: { label: '未运行', color: '#999' },
-// };
-
-function TaskItem({
-  item,
-  onToggle,
-  onEdit,
-  onExecute,
-  onDelete,
-}: {
-  item: Task;
-  onToggle: (id: string) => void;
-  onEdit: (task: Task) => void;
-  onExecute: (task: Task) => void;
-  onDelete: (id: string) => void;
+function TaskItem({ item, onToggle, onEdit, onExecute, onDelete }: {
+  item: Task; onToggle: (id: string) => void; onEdit: (task: Task) => void;
+  onExecute: (task: Task) => void; onDelete: (id: string) => void;
 }) {
-  const isSwitchOn = item.status !== 'stopped';
-
+  const isDark = useColorScheme() === 'dark';
+  const c = {
+    bg: isDark ? '#1E1E1E' : '#FFFFFF',
+    text: isDark ? '#FFFFFF' : '#1A1A1A',
+    secondary: isDark ? '#888888' : '#999999',
+    primary: isDark ? '#4FC3F7' : '#1A73E8',
+    destructive: isDark ? '#FF6B6B' : '#F44336',
+    success: isDark ? '#66BB6A' : '#4CAF50',
+  };
   return (
-    <Card style={styles.taskCard}>
-      <Card.Content style={styles.cardContent}>
-        <View style={styles.taskMainInfo}>
-          <View style={styles.titleRow}>
-            <Text style={styles.taskTitle} numberOfLines={1}>
-              {item.name}
-            </Text>
-            <Switch
-              value={isSwitchOn}
-              onValueChange={() => onToggle(item.id)}
-              color="#4F46E5"
-              style={styles.taskSwitch}
-            />
-          </View>
-
-          {item.description && (
-            <Text style={styles.taskDescription} numberOfLines={1}>
-              {item.description}
-            </Text>
-          )}
-
-          <View style={styles.taskFooter}>
-            <TouchableOpacity
-              style={styles.timeInfo}
-              onPress={() => onEdit(item)}
-            >
-              <Icon source="clock-outline" size={14} color="#666" />
-              <Text style={styles.taskTime}>{item.time}</Text>
-              <View style={styles.dot} />
-              <Text style={styles.instructionCount}>
-                {item.instruction.length} 个指令
-              </Text>
-            </TouchableOpacity>
-
-            <View style={styles.actionButtons}>
-              <IconButton
-                icon="pencil-outline"
-                size={18}
-                onPress={() => onEdit(item)}
-                style={styles.iconBtn}
-              />
-              <IconButton
-                icon="delete-outline"
-                size={18}
-                iconColor="#FF5252"
-                onPress={() => onDelete(item.id)}
-                style={styles.iconBtn}
-              />
-              <IconButton
-                icon="play"
-                size={18}
-                iconColor="#4CAF50"
-                onPress={() => onExecute(item)}
-                style={styles.iconBtn}
-              />
-            </View>
+    <View style={[st.card, { backgroundColor: c.bg }]}>
+      <View style={st.cardBody}>
+        <View style={st.titleRow}>
+          <Text style={[st.cardTitle, { color: c.text }]} numberOfLines={1}>{item.name}</Text>
+          <Switch value={item.status !== 'stopped'} onValueChange={() => onToggle(item.id)} color={c.primary} />
+        </View>
+        {item.description && (
+          <Text style={[st.cardDesc, { color: c.secondary }]} numberOfLines={1}>{item.description}</Text>
+        )}
+        <View style={st.cardFooter}>
+          <TouchableOpacity style={st.timeInfo} onPress={() => onEdit(item)}>
+            <Icon source="clock-outline" size={14} color={c.secondary} />
+            <Text style={[st.taskTime, { color: c.primary }]}>{item.time}</Text>
+            <Text style={[st.instrCount, { color: c.secondary }]}> · {item.instruction.length} 个指令</Text>
+          </TouchableOpacity>
+          <View style={st.actions}>
+            <IconButton icon="pencil-outline" size={18} iconColor={c.secondary} onPress={() => onEdit(item)} style={st.iconBtn} />
+            <IconButton icon="delete-outline" size={18} iconColor={c.destructive} onPress={() => onDelete(item.id)} style={st.iconBtn} />
+            <IconButton icon="play" size={18} iconColor={c.success} onPress={() => onExecute(item)} style={st.iconBtn} />
           </View>
         </View>
-      </Card.Content>
-    </Card>
+      </View>
+    </View>
   );
 }
 
 export default function TaskScreen() {
-  const [tasks, setTasks] = useState<Task[]>([]); // 初始为空，由 BackgroundTaskManager 加载
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [stats, setStats] = useState<TaskStats>({ running: 0, todayTriggered: 0, errors: 0 });
   const [isAppPickerVisible, setAppPickerVisible] = useState(false);
   const [installedApps, setInstalledApps] = useState<AppInfo[]>([]);
-  const [isInstructionEditorVisible, setInstructionEditorVisible] =
-    useState(false);
+  const [isInstructionEditorVisible, setInstructionEditorVisible] = useState(false);
   const [isCreateTaskModalVisible, setCreateTaskModalVisible] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const tasksRef = useRef<Task[]>([]);
+  const isDark = useColorScheme() === 'dark';
 
   useEffect(() => {
-    // 从 BackgroundTaskManager 加载已持久化的任务
     const loadData = async () => {
-      // 等待实例初始化（内部会调用 loadTasks）
-      // 这里的 tasks 已经是单例，loadTasks 在 constructor 中异步执行
-      // 为了确保 UI 同步，我们可以稍微延迟或直接获取
       setTimeout(() => {
         const loadedTasks = BackgroundTaskManager.getAllTasks();
         if (loadedTasks.length > 0) {
-          console.log('loadedTasks', loadedTasks);
           setTasks(loadedTasks);
+          tasksRef.current = loadedTasks;
         } else {
           setTasks(EXAMPLE_TASKS);
-          EXAMPLE_TASKS.forEach(task => {
-            BackgroundTaskManager.addTask(task);
-          });
+          tasksRef.current = EXAMPLE_TASKS;
+          EXAMPLE_TASKS.forEach(task => BackgroundTaskManager.addTask(task));
         }
       }, 500);
     };
     loadData();
-
-    // 订阅日志以更新统计数据
-    const unsubscribeLogs = LogManager.subscribe((logs) => {
-      calculateStats(tasks, logs);
-    });
-
-    return () => {
-      unsubscribeLogs();
-    };
+    const unsubscribeLogs = LogManager.subscribe((logs) => calculateStats(tasksRef.current, logs));
+    return () => unsubscribeLogs();
   }, []);
 
-  // 当任务列表变化时也更新统计
   useEffect(() => {
-    LogManager.getLogs().then(logs => {
-      calculateStats(tasks, logs);
-    });
+    tasksRef.current = tasks;
+    LogManager.getLogs().then(logs => calculateStats(tasks, logs));
   }, [tasks]);
 
   const calculateStats = (currentTasks: Task[], logs: LogEntry[]) => {
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    
-    const todayLogs = logs.filter(log => log.timestamp >= startOfDay);
-    
-    const running = currentTasks.filter(t => t.enabled).length;
-    
-    // 今日触发：计算包含“执行定时任务”关键字的日志数量
-    const todayTriggered = todayLogs.filter(log => 
-      log.message.includes('执行定时任务') || log.message.includes('任务执行成功')
-    ).length;
-
-    // 异常：今日日志中类型为 'error' 的数量
-    const errors = todayLogs.filter(log => log.type === 'error').length;
-
-    setStats({ running, todayTriggered, errors });
-  };
-
-  const handleToggle = (id: string) => {
-    setTasks(prev => {
-      const newTasks = prev.map(task => {
-        if (task.id === id) {
-          const newStatus: 'running' | 'stopped' =
-            task.status === 'stopped' ? 'running' : 'stopped';
-          const updatedTask = {
-            ...task,
-            status: newStatus,
-            enabled: newStatus === 'running',
-          };
-
-          // 同步到BackgroundTaskManager
-          if (newStatus === 'running') {
-            BackgroundTaskManager.enableTask(task.id);
-          } else {
-            BackgroundTaskManager.disableTask(task.id);
-          }
-
-          return updatedTask;
-        }
-        return task;
-      });
-      return newTasks;
+    const startOfDay = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).getTime();
+    const todayLogs = logs.filter(l => l.timestamp >= startOfDay);
+    setStats({
+      running: currentTasks.filter(t => t.enabled).length,
+      todayTriggered: todayLogs.filter(l => l.message.includes('执行定时任务') || l.message.includes('任务执行成功')).length,
+      errors: todayLogs.filter(l => l.type === 'error').length,
     });
   };
 
-  const handleEditTask = (task: Task) => {
-    setEditingTask(task);
-    setCreateTaskModalVisible(true);
+  const handleToggle = (id: string) => {
+    setTasks(prev => prev.map(task => {
+      if (task.id !== id) return task;
+      const newStatus = task.status === 'stopped' ? 'running' : 'stopped';
+      if (newStatus === 'running') BackgroundTaskManager.enableTask(id);
+      else BackgroundTaskManager.disableTask(id);
+      return { ...task, status: newStatus, enabled: newStatus === 'running' };
+    }));
   };
+
+  const handleEditTask = (task: Task) => { setEditingTask(task); setCreateTaskModalVisible(true); };
+
   const handleDeleteTask = (id: string) => {
     Alert.alert('确认删除', '确定要删除这个任务吗？', [
       { text: '取消', style: 'cancel' },
-      {
-        text: '删除',
-        style: 'destructive',
-        onPress: () => {
-          setTasks(prev => prev.filter(task => task.id !== id));
-          BackgroundTaskManager.removeTask(id);
-          Alert.alert('删除成功', '任务已删除');
-        },
-      },
+      { text: '删除', style: 'destructive', onPress: () => { setTasks(prev => prev.filter(t => t.id !== id)); BackgroundTaskManager.removeTask(id); } },
     ]);
   };
 
   const handleClearAllTasks = () => {
     Alert.alert('确认清空', '确定要清空所有任务吗？此操作不可恢复。', [
       { text: '取消', style: 'cancel' },
-      {
-        text: '全部清空',
-        style: 'destructive',
-        onPress: () => {
-          setTasks([]);
-          BackgroundTaskManager.clearTasks();
-          Alert.alert('清空成功', '所有本地任务已清除');
-        },
-      },
+      { text: '全部清空', style: 'destructive', onPress: () => { setTasks([]); BackgroundTaskManager.clearTasks(); } },
     ]);
   };
 
   const handleSaveTask = (taskData: Omit<Task, 'id'>, id?: string) => {
     if (id) {
-      // 修改任务
-      const updatedTask: Task = { ...taskData, id: id };
-      setTasks(prev => prev.map(t => (t.id === id ? updatedTask : t)));
-
-      // 同步到 BackgroundTaskManager
-      BackgroundTaskManager.addTask(updatedTask);
-
-      Alert.alert('修改成功', `任务 "${taskData.name}" 已更新`);
+      const updated = { ...taskData, id };
+      setTasks(prev => prev.map(t => t.id === id ? updated : t));
+      BackgroundTaskManager.addTask(updated);
     } else {
-      // 新增任务
-      const newTask: Task = {
-        ...taskData,
-        id: Date.now().toString(),
-      };
-
+      const newTask = { ...taskData, id: Date.now().toString() };
       setTasks(prev => [...prev, newTask]);
-
-      // 同步到 BackgroundTaskManager
       BackgroundTaskManager.addTask(newTask);
-
-      Alert.alert('创建成功', `任务 "${newTask.name}" 已创建`);
     }
     setEditingTask(null);
   };
@@ -385,108 +233,45 @@ export default function TaskScreen() {
     try {
       await requestForegroundPermission();
       BackgroundTaskManager.executeTaskById(task.id);
-      Alert.alert('执行成功', `任务 "${task.name}-${task.id}" 已执行`);
     } catch (error: any) {
-      Alert.alert('执行失败', `执行任务 "${task.name}" 失败: ${error.message}`);
+      Alert.alert('执行失败', error.message);
     }
   };
 
   const handleSaveInstructions = (instructions: TaskInstruction[]) => {
     if (!editingTask) return;
-
-    try {
-      const updatedTask: Task = { ...editingTask, instruction: instructions };
-      setTasks(prev =>
-        prev.map(task => (task.id === editingTask.id ? updatedTask : task)),
-      );
-
-      // 同步到 BackgroundTaskManager 并持久化
-      BackgroundTaskManager.addTask(updatedTask);
-
-      setInstructionEditorVisible(false);
-      setEditingTask(null);
-      Alert.alert('保存成功', '任务指令已更新');
-    } catch (error: any) {
-      Alert.alert('保存失败', `保存指令失败: ${error.message}`);
-    }
+    const updatedTask = { ...editingTask, instruction: instructions };
+    setTasks(prev => prev.map(task => task.id === editingTask.id ? updatedTask : task));
+    BackgroundTaskManager.addTask(updatedTask);
+    setInstructionEditorVisible(false);
+    setEditingTask(null);
   };
 
   const requestForegroundPermission = async () => {
     if (Platform.OS === 'android') {
       try {
-        const permissionsToRequest = [];
-
-        if (Platform.Version >= 33) {
-          permissionsToRequest.push(
-            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
-          );
-        }
-
-        if (permissionsToRequest.length > 0) {
-          const results = await PermissionsAndroid.requestMultiple(
-            permissionsToRequest,
-          );
-          const allGranted = Object.values(results).every(
-            result => result === PermissionsAndroid.RESULTS.GRANTED,
-          );
-          if (!allGranted) {
-            console.warn('部分权限未授予:', results);
-          }
-        }
-
-        // 引导用户开启忽略电池优化
-        if (
-          WakeScreenModule &&
-          WakeScreenModule.requestIgnoreBatteryOptimizations
-        ) {
-          WakeScreenModule.requestIgnoreBatteryOptimizations();
-        }
-
+        const perms: Permission[] = [];
+        if (Platform.Version >= 33) perms.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+        if (perms.length > 0) await PermissionsAndroid.requestMultiple(perms);
+        if (WakeScreenModule?.requestIgnoreBatteryOptimizations) WakeScreenModule.requestIgnoreBatteryOptimizations();
         return true;
-      } catch (err) {
-        console.error('权限申请失败：', err);
-        return false;
-      }
+      } catch { return false; }
     }
     return true;
   };
+
   const cronSchedule = async () => {
     if (BackgroundTaskManager.isServiceRunning()) {
-      Alert.alert('已停止', '后台调度服务已停止');
       await BackgroundTaskManager.stop();
     } else {
-      const hasPermission = await requestForegroundPermission();
-      if (!hasPermission) {
-        Alert.alert('权限不足', '未获取前台服务权限，无法启动后台任务');
-        return;
-      }
-      Alert.alert('已启动', '后台调度服务已启动，将每分钟检查一次任务');
+      const ok = await requestForegroundPermission();
+      if (!ok) { Alert.alert('权限不足', '未获取前台服务权限'); return; }
       await BackgroundTaskManager.start();
     }
   };
 
-  const handleOpenAccessibility = () => {
-    TouchSimulationModule.openAccessibilitySettings();
-  };
-
   const handleLaunchApp = async (packageName: string, userId: number = 0) => {
-    LogManager.addLog(`尝试启动应用: ${packageName} (UID: ${userId})`, 'info');
-    const success = await AppManager.launchApp(packageName, userId);
-    if (success) {
-      LogManager.addLog(`应用启动成功: ${packageName}`, 'success');
-    } else {
-      LogManager.addLog(`应用启动失败: ${packageName}`, 'error');
-    }
-  };
-
-  const openAppPicker = async () => {
-    try {
-      const apps = await AppManager.getAllInstalledApps();
-      setInstalledApps(apps);
-      setAppPickerVisible(true);
-    } catch (e) {
-      Alert.alert('错误', '无法获取应用列表');
-    }
+    await AppManager.launchApp(packageName, userId);
   };
 
   const openCommonAppsPicker = async () => {
@@ -494,8 +279,8 @@ export default function TaskScreen() {
       const apps = await AppManager.getCommonApps();
       setInstalledApps(apps);
       setAppPickerVisible(true);
-    } catch (e) {
-      Alert.alert('错误', '无法获取常用应用列表');
+    } catch (e: unknown) {
+      Alert.alert('错误', `无法获取常用应用列表: ${e}`);
     }
   };
 
@@ -505,55 +290,34 @@ export default function TaskScreen() {
   };
 
   return (
-    <View style={styles.pageContainer}>
+    <View style={[st.page, { backgroundColor: isDark ? '#121212' : '#F5F5F5' }]}>
       <TaskHeader stats={stats} />
-
-      <View style={styles.specialActionBox}>
-        <Button
-          mode="contained"
-          onPress={() => cronSchedule()}
-          icon="timer-outline"
-          style={styles.wakeButton}
+      <View style={st.actions_section}>
+        <TouchableOpacity
+          style={[st.primaryBtn, { backgroundColor: isDark ? '#4FC3F7' : '#1A73E8' }]}
+          onPress={cronSchedule} activeOpacity={0.8}
         >
-          启动后台通知服务
-        </Button>
-
-        <Button
-          mode="text"
-          onPress={handleOpenAccessibility}
-          icon="gesture-tap"
-          style={{ marginTop: -4 }}
-          labelStyle={{ fontSize: 12, color: '#E91E63' }}
-        >
-          模拟上滑失败？去开启“辅助功能”服务
-        </Button>
-
-        <Button
-          mode="text"
-          onPress={openCommonAppsPicker}
-          icon="star-outline"
-          style={{ marginTop: -4 }}
-          labelStyle={{ fontSize: 12, color: '#FF9800' }}
-        >
-          从常用应用选择并打开
-        </Button>
+          <Icon source="timer-outline" size={20} color="#FFF" />
+          <Text style={st.primaryBtnText}>启动后台通知服务</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={st.linkBtn} onPress={() => TouchSimulationModule.openAccessibilitySettings()} activeOpacity={0.7}>
+          <Text style={[st.linkBtnText, { color: isDark ? '#FFB74D' : '#FF9800' }]}>模拟上滑失败？去开启"辅助功能"服务</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={st.linkBtn} onPress={openCommonAppsPicker} activeOpacity={0.7}>
+          <Text style={[st.linkBtnText, { color: isDark ? '#FFB74D' : '#FF9800' }]}>从常用应用选择并打开</Text>
+        </TouchableOpacity>
       </View>
 
-      <AppPicker
-        visible={isAppPickerVisible}
-        onClose={() => setAppPickerVisible(false)}
-        onAppSelect={selectApp}
-        installedApps={installedApps}
-      />
+      <AppPicker visible={isAppPickerVisible} onClose={() => setAppPickerVisible(false)} onAppSelect={selectApp} installedApps={installedApps} />
 
-      <View style={styles.listHeader}>
-        <Text style={styles.listTitle}>任务列表</Text>
+      <View style={st.listHeader}>
+        <Text style={[st.listTitle, { color: isDark ? '#FFF' : '#1A1A1A' }]}>任务列表</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity onPress={handleClearAllTasks} style={{ marginRight: 16 }}>
-            <Text style={[styles.filterText, { color: '#FF5252' }]}>清空全部</Text>
+            <Text style={[st.filterText, { color: '#F44336' }]}>清空全部</Text>
           </TouchableOpacity>
           <TouchableOpacity>
-            <Text style={styles.filterText}>全部任务</Text>
+            <Text style={[st.filterText, { color: isDark ? '#4FC3F7' : '#1A73E8' }]}>全部任务</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -561,210 +325,47 @@ export default function TaskScreen() {
       <FlatList
         data={tasks}
         renderItem={({ item }) => (
-          <TaskItem
-            item={item}
-            onToggle={handleToggle}
-            onEdit={handleEditTask}
-            onExecute={handleExecuteTask}
-            onDelete={handleDeleteTask}
-          />
+          <TaskItem item={item} onToggle={handleToggle} onEdit={handleEditTask} onExecute={handleExecuteTask} onDelete={handleDeleteTask} />
         )}
         keyExtractor={item => item.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={st.listContent}
         showsVerticalScrollIndicator={false}
       />
 
-      <FAB
-        icon="plus"
-        style={styles.fab}
-        onPress={() => setCreateTaskModalVisible(true)}
-      />
-
-      {/* 创建任务弹窗 */}
-      <CreateTaskModal
-        visible={isCreateTaskModalVisible}
-        onClose={() => {
-          setCreateTaskModalVisible(false);
-          setEditingTask(null);
-        }}
-        onSave={handleSaveTask}
-        editTask={editingTask}
-      />
-
-      {/* 指令编辑器 */}
-      <InstructionEditor
-        visible={isInstructionEditorVisible}
-        onClose={() => {
-          setInstructionEditorVisible(false);
-          setEditingTask(null);
-        }}
-        onSave={handleSaveInstructions}
-        task={editingTask}
-        initialInstructions={editingTask?.instruction || []}
-      />
+      <FAB icon="plus" style={[st.fab, { backgroundColor: isDark ? '#4FC3F7' : '#1A73E8' }]} color="#FFF" onPress={() => setCreateTaskModalVisible(true)} />
+      <CreateTaskModal visible={isCreateTaskModalVisible} onClose={() => { setCreateTaskModalVisible(false); setEditingTask(null); }} onSave={handleSaveTask} editTask={editingTask} />
+      <InstructionEditor visible={isInstructionEditorVisible} onClose={() => { setInstructionEditorVisible(false); setEditingTask(null); }} onSave={handleSaveInstructions} task={editingTask} initialInstructions={editingTask?.instruction || []} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  pageContainer: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  specialActionBox: {
-    padding: 16,
-    paddingTop: 0,
-  },
-  wakeButton: {
-    backgroundColor: '#6200EE',
-    borderRadius: 8,
-  },
-  headerContainer: {
-    padding: 16,
-    backgroundColor: '#fff',
-  },
-  statBox: {
-    flexDirection: 'row',
-    backgroundColor: '#EEF2FF',
-    borderRadius: 16,
-    padding: 16,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#303F9F',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-  },
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: '#D1D9FF',
-  },
-  listHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  listTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  filterText: {
-    color: '#0088ff',
-    fontSize: 14,
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 80, // 留出FAB的空间
-  },
-  taskCard: {
-    marginBottom: 12,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  cardContent: {
-    padding: 12,
-  },
-  taskMainInfo: {
-    flex: 1,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  taskTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
-    flex: 1,
-    marginRight: 8,
-  },
-  taskSwitch: {
-    transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }],
-  },
-  taskDescription: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 12,
-  },
-  taskFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  timeInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  taskTime: {
-    fontSize: 13,
-    color: '#4F46E5',
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  dot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: '#CCC',
-    marginHorizontal: 8,
-  },
-  instructionCount: {
-    fontSize: 12,
-    color: '#999',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  iconBtn: {
-    margin: 0,
-    width: 32,
-    height: 32,
-  },
-  playButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginLeft: 8,
-  },
-  playButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginLeft: 4,
-  },
-  fab: {
-    position: 'absolute',
-    margin: 16,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#4F46E5',
-  },
+const st = StyleSheet.create({
+  page: { flex: 1 },
+  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
+  statBox: { flexDirection: 'row', borderRadius: 16, padding: 20, justifyContent: 'space-between', alignItems: 'center' },
+  statItem: { flex: 1, alignItems: 'center' },
+  statValue: { fontSize: 28, fontWeight: '700' },
+  statLabel: { fontSize: 12, marginTop: 4, fontWeight: '500' },
+  statDivider: { width: 1, height: 30 },
+  actions_section: { padding: 16, paddingTop: 12 },
+  primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 24, gap: 8, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+  primaryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
+  linkBtn: { paddingVertical: 12, paddingHorizontal: 4 },
+  linkBtnText: { fontSize: 13, fontWeight: '500' },
+  listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginTop: 12, marginBottom: 8 },
+  listTitle: { fontSize: 20, fontWeight: '700' },
+  filterText: { fontSize: 14, fontWeight: '500' },
+  listContent: { paddingHorizontal: 16, paddingBottom: 100 },
+  card: { marginBottom: 12, borderRadius: 16, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4 },
+  cardBody: { padding: 16 },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  cardTitle: { fontSize: 16, fontWeight: '600', flex: 1, marginRight: 12 },
+  cardDesc: { fontSize: 13, marginBottom: 12 },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
+  timeInfo: { flexDirection: 'row', alignItems: 'center' },
+  taskTime: { fontSize: 14, fontWeight: '600', marginLeft: 4 },
+  instrCount: { fontSize: 12 },
+  actions: { flexDirection: 'row', alignItems: 'center' },
+  iconBtn: { margin: 0, width: 32, height: 32 },
+  fab: { position: 'absolute', margin: 16, right: 0, bottom: 0, borderRadius: 28, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8 },
 });

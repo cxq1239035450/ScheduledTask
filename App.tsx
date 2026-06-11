@@ -1,11 +1,4 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import { StatusBar, StyleSheet, useColorScheme, View} from 'react-native';
+import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
 import {
   SafeAreaProvider,
   useSafeAreaInsets,
@@ -17,7 +10,7 @@ function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor={isDarkMode ? '#121212' : '#F5F5F5'} />
       <AppContent />
     </SafeAreaProvider>
   );
@@ -25,15 +18,17 @@ function App() {
 
 function AppContent() {
   const safeAreaInsets = useSafeAreaInsets();
+  const isDark = useColorScheme() === 'dark';
 
   return (
     <View style={[
-      styles.container, 
-      { 
+      styles.container,
+      {
         paddingTop: safeAreaInsets.top,
         paddingBottom: safeAreaInsets.bottom,
         paddingLeft: safeAreaInsets.left,
-        paddingRight: safeAreaInsets.right
+        paddingRight: safeAreaInsets.right,
+        backgroundColor: isDark ? '#121212' : '#F5F5F5',
       }
     ]}>
       <TabNavigator />
@@ -44,29 +39,6 @@ function AppContent() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
-  },
-  subtitle: {
-    fontSize: 18,
-    color: '#666',
-    marginBottom: 20,
-  },
-  text: {
-    fontSize: 16,
-    color: '#444',
-    textAlign: 'center',
   },
 });
 

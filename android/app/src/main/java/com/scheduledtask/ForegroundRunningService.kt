@@ -100,46 +100,55 @@ class ForegroundRunningService : Service() {
         if (matchedTasks.isNotEmpty()) {
             Log.d("ForegroundService", "Native tasks triggered: ${matchedTasks.size} tasks at $currentTime")
             
-            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-            
-            // 检查是否有唤醒任务
-            val hasWakeupTask = matchedTasks.contains("wakeup")
-            
-            if (hasWakeupTask) {
-                // 如果有唤醒任务，先执行唤醒。
-                // 注意：在获取 PARTIAL_WAKE_LOCK 之前执行唤醒，
-                // 避免某些系统因为 CPU 已经处于 Partial 唤醒状态而忽略了 ACQUIRE_CAUSES_WAKEUP 的屏幕唤醒指令。
-                wakeUpScreenOnly()
-            }
+            // 在子线程中执行任务分发，避免阻塞主线程导致 ANR
+            Thread {
+                val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+                
+                // 检查是否有唤醒任务
+                val hasWakeupTask = matchedTasks.contains("wakeup")
+                
+                if (hasWakeupTask) {
+                    // 如果有唤醒任务，先执行唤醒。
+                    // 注意：在获取 PARTIAL_WAKE_LOCK 之前执行唤醒，
+                    // 避免某些系统因为 CPU 已经处于 Partial 唤醒状态而忽略了 ACQUIRE_CAUSES_WAKEUP 的屏幕唤醒指令。
+                    wakeUpScreenOnly()
+                }
 
-            // 获取一个短时间的 PARTIAL_WAKE_LOCK，确保任务分发不会被挂起（主要针对非唤醒任务，或者唤醒后的持续运行）
-            val dispatchLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ScheduledTask::TaskDispatchLock")
-            dispatchLock.acquire(5000L)
-            
-            for (taskId in matchedTasks) {
-                // 如果是唤醒任务，且上面已经执行过 wakeUpScreenOnly，这里可以跳过或记录日志
-                if (taskId == "wakeup") {
-                    if (!hasWakeupTask) { // 理论上不会进入这里，因为上面已经判断过了
-                        wakeUpScreenOnly()
+                // 获取一个短时间的 PARTIAL_WAKE_LOCK，确保任务分发不会被挂起（主要针对非唤醒任务，或者唤醒后的持续运行）
+                val dispatchLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ScheduledTask::TaskDispatchLock")
+                dispatchLock.acquire(5000L)
+                
+                try {
+                    for (taskId in matchedTasks) {
+                        // 如果是唤醒任务，且上面已经执行过 wakeUpScreenOnly，这里可以跳过或记录日志
+                        if (taskId == "wakeup") {
+                            if (!hasWakeupTask) { // 理论上不会进入这里，因为上面已经判断过了
+                                wakeUpScreenOnly()
+                            }
+                            Log.d("ForegroundService", "Executed native wakeup logic for taskId: $taskId")
+                        }
+
+                        // 所有任务都通过 Headless JS 执行，确保 JS 逻辑能运行
+                        val serviceIntent = Intent(this@ForegroundRunningService, TaskHeadlessJsService::class.java).apply {
+                            putExtra("taskId", taskId)
+                        }
+                        
+                        // HeadlessJsTaskService 在内部会自动处理 Foreground 逻辑（如果配置了超时等），
+                        // 在已经运行 Foreground Service 的情况下，直接 startService 即可，
+                        // 严禁在没有在 TaskHeadlessJsService.onCreate 中显式调用 startForeground 的情况下使用 startForegroundService，
+                        // 否则会导致 Android 8.0+ 系统抛出 ForegroundServiceDidNotStartInTimeException 导致应用崩溃。
+                        startService(serviceIntent)
+                        Log.d("ForegroundService", "Started Headless JS for task: $taskId")
+                        
+                        // 等待一小段时间确保任务开始执行
+                        Thread.sleep(1000)
                     }
-                    Log.d("ForegroundService", "Executed native wakeup logic for taskId: $taskId")
+                } finally {
+                    if (dispatchLock.isHeld) {
+                        dispatchLock.release()
+                    }
                 }
-
-                // 所有任务都通过 Headless JS 执行，确保 JS 逻辑能运行
-                val serviceIntent = Intent(this, TaskHeadlessJsService::class.java).apply {
-                    putExtra("taskId", taskId)
-                }
-                
-                // HeadlessJsTaskService 在内部会自动处理 Foreground 逻辑（如果配置了超时等），
-                // 在已经运行 Foreground Service 的情况下，直接 startService 即可，
-                // 严禁在没有在 TaskHeadlessJsService.onCreate 中显式调用 startForeground 的情况下使用 startForegroundService，
-                // 否则会导致 Android 8.0+ 系统抛出 ForegroundServiceDidNotStartInTimeException 导致应用崩溃。
-                startService(serviceIntent)
-                Log.d("ForegroundService", "Started Headless JS for task: $taskId")
-                
-                // 等待一小段时间确保任务开始执行
-                Thread.sleep(1000)
-            }
+            }.start()
         }
     }
 

@@ -30,7 +30,7 @@ export interface TaskExecutionResult {
 export class DailyTaskManager {
   private tasks: DailyTask[] = [];
   private isRunning: boolean = false;
-  private currentTimer: NodeJS.Timeout | null = null;
+  private currentTimer: ReturnType<typeof setTimeout> | null = null;
   private config: Required<TaskManagerConfig>;
   private executedTasks: Set<string | number> = new Set();
 
