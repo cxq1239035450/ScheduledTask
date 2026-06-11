@@ -1,10 +1,11 @@
 package com.scheduledtask
 
+import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
-import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.ReadableArray
+import com.facebook.react.bridge.ReadableMap
 import android.content.Intent
 import android.os.Build
 import android.util.Log
@@ -20,8 +21,6 @@ class BackgroundTaskModule(reactContext: ReactApplicationContext) : ReactContext
         val context = reactApplicationContext
         val intent = Intent(context, ForegroundRunningService::class.java).apply {
             action = "SYNC_TASKS"
-            // 将任务列表转换为 JSON 字符串传递给 Service，或者通过更复杂的序列化。
-            // 简单起见，这里将 ReadableArray 转换为 ArrayList<String> 传递。
             val taskList = ArrayList<String>()
             for (i in 0 until tasks.size()) {
                 val task = tasks.getMap(i)
@@ -33,7 +32,7 @@ class BackgroundTaskModule(reactContext: ReactApplicationContext) : ReactContext
             }
             putStringArrayListExtra("taskList", taskList)
         }
-        
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(intent)
         } else {
@@ -43,32 +42,48 @@ class BackgroundTaskModule(reactContext: ReactApplicationContext) : ReactContext
     }
 
     @ReactMethod
-    fun startService(options: ReadableMap) {
-        val context = reactApplicationContext
-        val intent = Intent(context, ForegroundRunningService::class.java)
-        
-        // 将 options 中的参数传递给 Service
-        if (options.hasKey("taskTitle")) {
-            intent.putExtra("taskTitle", options.getString("taskTitle"))
-        }
-        if (options.hasKey("taskDesc")) {
-            intent.putExtra("taskDesc", options.getString("taskDesc"))
-        }
+    fun startService(options: ReadableMap, promise: Promise) {
+        try {
+            val context = reactApplicationContext
+            val intent = Intent(context, ForegroundRunningService::class.java)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent)
-        } else {
-            context.startService(intent)
+            if (options.hasKey("taskTitle")) {
+                intent.putExtra("taskTitle", options.getString("taskTitle"))
+            }
+            if (options.hasKey("taskDesc")) {
+                intent.putExtra("taskDesc", options.getString("taskDesc"))
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+            Log.d("BackgroundTaskModule", "Foreground service start requested")
+            promise.resolve(true)
+        } catch (e: Exception) {
+            Log.e("BackgroundTaskModule", "Failed to start foreground service", e)
+            promise.reject("START_SERVICE_FAILED", e.message, e)
         }
-        Log.d("BackgroundTaskModule", "Foreground service start requested")
     }
 
     @ReactMethod
-    fun stopService() {
-        val context = reactApplicationContext
-        val intent = Intent(context, ForegroundRunningService::class.java)
-        context.stopService(intent)
-        Log.d("BackgroundTaskModule", "Foreground service stop requested")
+    fun stopService(promise: Promise) {
+        try {
+            val context = reactApplicationContext
+            val intent = Intent(context, ForegroundRunningService::class.java)
+            val stopped = context.stopService(intent)
+            Log.d("BackgroundTaskModule", "Foreground service stop requested: $stopped")
+            promise.resolve(stopped)
+        } catch (e: Exception) {
+            Log.e("BackgroundTaskModule", "Failed to stop foreground service", e)
+            promise.reject("STOP_SERVICE_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun isServiceRunning(promise: Promise) {
+        promise.resolve(ForegroundRunningService.isServiceActive)
     }
 
     @ReactMethod
@@ -76,7 +91,7 @@ class BackgroundTaskModule(reactContext: ReactApplicationContext) : ReactContext
         val context = reactApplicationContext
         val intent = Intent(context, ForegroundRunningService::class.java)
         intent.action = "UPDATE_NOTIFICATION"
-        
+
         if (options.hasKey("taskTitle")) {
             intent.putExtra("taskTitle", options.getString("taskTitle"))
         }

@@ -148,6 +148,7 @@ function TaskItem({ item, onToggle, onEdit, onExecute, onDelete }: {
 export default function TaskScreen() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [stats, setStats] = useState<TaskStats>({ running: 0, todayTriggered: 0, errors: 0 });
+  const [serviceSwitching, setServiceSwitching] = useState(false);
   const [isAppPickerVisible, setAppPickerVisible] = useState(false);
   const [installedApps, setInstalledApps] = useState<AppInfo[]>([]);
   const [isInstructionEditorVisible, setInstructionEditorVisible] = useState(false);

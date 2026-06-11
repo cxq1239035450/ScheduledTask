@@ -352,6 +352,7 @@ class BackgroundTaskManager {
             this.updateNotificationStatus();
         } catch (e) {
             console.error('Failed to start background service', e);
+            throw e;
         }
     }
 
